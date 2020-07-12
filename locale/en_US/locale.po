@@ -1,0 +1,91 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2020-07-05T06:56:43-07:00\n"
+"PO-Revision-Date: 2020-07-05T06:56:43-07:00\n"
+"Language: \n"
+
+msgid "plugins.importexport.articleImporter.displayName"
+msgstr "Article Importer Plugin"
+
+msgid "plugins.importexport.articleImporter.description"
+msgstr "Import articles into journal from A++ and JATS XML."
+
+msgid "plugins.importexport.articleImporter.cliUsage"
+msgstr "Command-line tool for importing A++ and JATS XML article data into OJS\n"
+"Usage:\n"
+"{$scriptName} journal username editorUsername defaultEmail importPath\n"
+"journal - the journal into which the articles should be imported (use journal path)\n"
+"username - the user to whom imported articles should be assigned; note: this user must have the Author role\n"
+"editorUsername - the editor to whom imported articles should be assigned; note: this user must have the Journal Editor role and access to the Production stage\n"
+"defaultEmail - assigned to article metadata when author email not provided in import XML\n"
+"importPath - full filepath to import XML/PDF files (e.g. /home/user/import_files); folder structure must be of the form vol#/iss#/article#\n"
+
+msgid "plugins.importexport.articleImporter.importStart"
+msgstr "Import started."
+
+msgid "plugins.importexport.articleImporter.importEnd"
+msgstr "Import completed."
+
+msgid "plugins.importexport.articleImporter.importStatus"
+msgstr "Found {$count} articles, of which {$imported} were imported, {$skipped} were skipped and {$failed} failed."
+
+msgid "plugins.importexport.articleImporter.importError"
+msgstr "Import interrupted by error: {$message}"
+
+msgid "plugins.importexport.articleImporter.articleImported"
+msgstr "Imported {$article}."
+
+msgid "plugins.importexport.articleImporter.unknownJournal"
+msgstr "Unknown Journal: \"{$journal}\"."
+
+msgid "plugins.importexport.articleImporter.unknownUser"
+msgstr "Unknown User: \"{$username}\"."
+
+msgid "plugins.importexport.articleImporter.unknownEmail"
+msgstr "Invalid Email: \"{$email}\"."
+
+msgid "plugins.importexport.articleImporter.directoryDoesNotExist"
+msgstr "The directory \"{$directory}\" does not exist."
+
+msgid "plugins.importexport.articleImporter.failedToParseXMLDocument"
+msgstr "Failed to parse XML document."
+
+msgid "plugins.importexport.articleImporter.invalidDoctype"
+msgstr "Invalid DOCTYPE."
+
+msgid "plugins.importexport.articleImporter.missingEditorGroupId"
+msgstr "The user specified as editor is not assigned an Editor role."
+
+msgid "plugins.importexport.articleImporter.missingPubDate"
+msgstr "The article publication date is missing."
+
+msgid "plugins.importexport.articleImporter.invalidStructure"
+msgstr "The folder does not match the format \"volume #/issue #/article #\", found at \"{$path}\"."
+
+msgid "plugins.importexport.articleImporter.missingGalley"
+msgstr "The article galley is missing for \"{$article}\""
+
+msgid "plugins.importexport.articleImporter.articleTitleMissing"
+msgstr "The article title is missing."
+
+msgid "plugins.importexport.articleImporter.unexpectedGalley"
+msgstr "Expected 1 submission file, but {$count} were found."
+
+msgid "plugins.importexport.articleImporter.unexpectedMetadata"
+msgstr "Expected 1 metadata file, but {$count} were found."
+
+msgid "plugins.importexport.articleImporter.alreadyExists"
+msgstr "Submission with public ID {$type} \"{$id}\" already exists."
+
+msgid "plugins.importexport.articleImporter.missingPublicationDate"
+msgstr "The publication date is missing or invalid."
+
+msgid "plugins.importexport.articleImporter.articleSkipped"
+msgstr "Skipped {$article}: {$message}"
