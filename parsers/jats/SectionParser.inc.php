@@ -36,6 +36,8 @@ trait SectionParser {
 	 */
 	public function getSection(): \Section
 	{
+		static $cache = [];
+
 		if ($this->_section) {
 			return $this->_section;
 		}
@@ -59,7 +61,7 @@ trait SectionParser {
 			$sectionNames['en_US'] = end($sectionName);
 		}
 
-		// Tries to find entry in the cache
+		// Tries to find an entry in the cache
 		foreach ($sectionNames as $locale => $title) {
 			if ($this->_section = $cache[$this->getContextId()][$locale][$title] ?? null) {
 				break;
@@ -67,7 +69,7 @@ trait SectionParser {
 		}
 
 		if (!$this->_section) {
-			// Tries to find entry in database
+			// Tries to find an entry in the database
 			$sectionDao = \Application::getSectionDAO();
 			foreach ($sectionNames as $locale => $title) {
 				if ($this->_section = $sectionDao->getByTitle($title, $this->getContextId(), $locale)) {

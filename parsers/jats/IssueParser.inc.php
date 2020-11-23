@@ -36,6 +36,8 @@ trait IssueParser {
 	 */
 	public function getIssue(): \Issue
 	{
+		static $cache = [];
+
 		if ($this->_issue) {
 			return $this->_issue;
 		}

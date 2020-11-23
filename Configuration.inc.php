@@ -165,7 +165,6 @@ class Configuration {
 		return $this->_genre;
 	}
 
-
 	/**
 	 * Retrieves an article iterator
 	 * @return ArticleIterator

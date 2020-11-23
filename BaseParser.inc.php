@@ -68,7 +68,6 @@ abstract class BaseParser {
 	 */
 	public abstract function getSection(): \Section;
 
-
 	/**
 	 * Retrieves the public IDs
 	 * @return array Returns array, where the key is the type and value the ID
