@@ -135,6 +135,6 @@ class ArticleEntry {
 			}
 		}
 		// If no parser could understand the format
-		throw new NoSuitableParserException();
+		throw new NoSuitableParserException(__('plugins.importexport.articleImporter.invalidDoctype'));
 	}
 }
