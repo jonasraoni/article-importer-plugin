@@ -17,7 +17,7 @@ You will need to review your metadata XML files and ensure that all required dat
 - section/type
 - volume/issue
 
-Import files will need to be placed in your OJS server directory, using the following path convention:
+Import files will need to be placed in a directory on your OJS server, using the following path convention:
 - `xml/vol#/iss#/#`
 
 where:
@@ -25,6 +25,8 @@ where:
 - `vol#` is the volume number folder that contains all issues for the volume
 - `iss#` is the issue number folder that contains all articles for the issue
 - `#` is the article # folder that contains the article metadata.xml and fulltext.pdf files
+
+All `#` designations will be treated as numeric values; e.g. 'no.01-02' will be interpreted as "1".
 
 ### Plugin installation
 This plugin will need to be installed in your **OJS 3.2.1 or newer** installation:
