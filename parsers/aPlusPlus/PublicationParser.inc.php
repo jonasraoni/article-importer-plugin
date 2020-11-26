@@ -104,10 +104,10 @@ trait PublicationParser {
 		$publication->setData('copyrightYear', $this->selectText('Journal/Volume/Issue/Article/ArticleInfo/ArticleCopyright/CopyrightYear') ?: $publicationDate->format('Y'));
 		$publication->setData('licenseURL', null);
 
-		$this->_processAuthors($publication);
-
 		// Inserts the publication and updates the submission's publication ID
 		$publication = \Services::get('publication')->add($publication, \Application::get()->getRequest());
+
+		$this->_processAuthors($publication);
 
 		// Handle PDF galley
 		$this->_insertPDFGalley($publication);
