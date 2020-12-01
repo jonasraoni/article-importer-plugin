@@ -89,7 +89,8 @@ trait IssueParser {
 			if ($issueCover) {
 				import('classes.file.PublicFileManager');
 				$publicFileManager = new \PublicFileManager();
-				$ext = array_pop(explode('.', $issueCover));
+				$fileparts = explode('.', $issueCover);
+				$ext = array_pop($fileparts);
 				$newFileName = 'cover_issue_' . $issue->getId() . '_' . $this->getLocale() . '.' . $ext;
 				$publicFileManager->copyContextFile($this->getContextId(), $issueCover, $newFileName);
 				$issue->setCoverImage($newFileName, $this->getLocale());
