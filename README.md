@@ -28,6 +28,8 @@ where:
 
 All `#` designations will be treated as numeric values; e.g. 'no.01-02' will be interpreted as "1".
 
+A file named cover.tiff, cover.tif, cover.jpeg, cover.jpg, or cover.png may be placed in the `iss#` folder, and will become the issue cover image, if present.
+
 ### Plugin installation
 This plugin will need to be installed in your **OJS 3.2.1 or newer** installation:
 - Ensure that the plugin branch/version matches your version of OJS
