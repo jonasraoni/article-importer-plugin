@@ -78,6 +78,25 @@ trait IssueParser {
 			$issue->setData('showTitle', false);
 			$issue->stampModified();
 			$issueDao->insertObject($issue);
+	
+			$issueFolder = dirname($entry->getSubmissionPath());
+			$issueCover = null;
+			foreach (array('tif', 'tiff', 'png', 'jpg', 'jpeg') as $ext) {
+				$checkFile = $issueFolder.DIRECTORY_SEPARATOR.'cover'.'.'.$ext;
+				if (file_exists($checkFile)) {
+					$issueCover = $checkFile;
+					break;
+				}
+			}
+			if ($issueCover) {
+				import('classes.file.PublicFileManager');
+				$publicFileManager = new \PublicFileManager();
+				$ext = array_pop(explode('.', $issueCover));
+				$newFileName = 'cover_issue_' . $issue->getId() . '_' . $this->getLocale() . '.' . $ext;
+				$publicFileManager->copyContextFile($this->getContextId(), $issueCover, $newFileName);
+				$issue->setCoverImage($newFileName, $this->getLocale());
+				$issueDao->updateObject($issue);	
+			}
 			
 			$this->_isIssueOwner = true;
 

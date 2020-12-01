@@ -85,6 +85,15 @@ class ArticleEntry {
 	}
 
 	/**
+	 * Returns the path to the folder containing the article files
+	 * @return string
+	 */
+	public function getSubmissionPath(): string
+	{
+		return dirname($this->getSubmissionFile()->getPathname());
+	}
+
+	/**
 	 * Retrieves the submission file
 	 * @throws \Exception Throws if there's more than one submission file
 	 * @return \SplFileInfo
