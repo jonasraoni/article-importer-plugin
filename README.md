@@ -29,7 +29,11 @@ where:
 
 All `#` designations will be treated as numeric values; e.g. 'no.01-02' will be interpreted as "1".
 
+### Plugin installation
+
 The article folder must have only one XML file, with the extension of `.xml` or `.meta`, and only one fulltext PDF file, with the extension of `.pdf`.
+
+A file named cover.tiff, cover.tif, cover.jpeg, cover.jpg, or cover.png may be placed in the `iss#` folder, and will become the issue cover image, if present.
 
 If importing JATS, the original metadata XML will be added as a production ready file.  Dependent files as named in the XML (via `asset` or `graphic` elements) will be appended, if the files are found in the article folder.
 
@@ -107,10 +111,6 @@ where:
 ## Limitations
 
 Due to limitations with exported XML metadata, the plugin imports published articles in sequential order. Imported articles may need to be further sorted in their respective issue’s table of contents in OJS. In addition, while the plugin attempts to preserve issue sections, some section names and assignments may need correction following the import process.
-
-The plugin does not import the following journal content, which can be uploaded following the import:
-- Article supplementary files
-- Issue cover images
 
 Please note the import plugin is intended for journal content only and does not support the migration of other formats.
 
