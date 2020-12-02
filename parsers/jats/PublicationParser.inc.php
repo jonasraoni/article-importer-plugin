@@ -121,12 +121,144 @@ trait PublicationParser {
 		// Handle PDF galley
 		$this->_insertPDFGalley($publication);
 
+		// Record this XML itself
+		$this->_insertXMLSubmissionFile($publication);
+
 		// Publishes the article
 		\Services::get('publication')->publish($publication);
 
 		return $publication;
 	}
-	
+		
+	/**
+	 * Inserts the PDF galley
+	 * @param \Publication $publication
+	 */
+	private function _insertXMLSubmissionFile(\Publication $publication): void
+	{
+		import('lib.pkp.classes.file.SubmissionFileManager');
+		$splfile = $this->getArticleEntry()->getMetadataFile();
+		$filename = $splfile->getPathname();
+
+		$genreId = \GENRE_CATEGORY_DOCUMENT;
+		$fileSize = filesize($filename);
+		$fileType = "text/xml";
+		$fileStage = \SUBMISSION_FILE_PRODUCTION_READY;
+		$userId = $this->getConfiguration()->getUser()->getId();
+
+		$submission = $this->getSubmission();
+
+		$submissionFileDao = \DAORegistry::getDAO('SubmissionFileDAO');
+		$newSubmissionFile = $submissionFileDao->newDataObjectByGenreId($genreId);
+		$newSubmissionFile->setSubmissionId($submission->getId());
+		$newSubmissionFile->setSubmissionLocale($submission->getLocale());
+		$newSubmissionFile->setGenreId($genreId);
+		$newSubmissionFile->setFileStage($fileStage);
+		$newSubmissionFile->setDateUploaded(\Core::getCurrentDate());
+		$newSubmissionFile->setDateModified(\Core::getCurrentDate());
+		$newSubmissionFile->setOriginalFileName($splfile->getFilename());
+		$newSubmissionFile->setUploaderUserId($userId);
+		$newSubmissionFile->setFileSize($fileSize);
+		$newSubmissionFile->setFileType($fileType);
+		$newSubmissionFile->setName($splfile->getFilename(), $submission->getLocale());
+
+		$insertedSubmissionFile = $submissionFileDao->insertObject($newSubmissionFile, $filename);
+
+		foreach ($this->select('//asset') as $asset) {
+			$assetFilename = $asset->getAttribute('path');
+			$dependentFilePath = dirname($filename) . DIRECTORY_SEPARATOR . $assetFilename;
+			if (file_exists($dependentFilePath)) {
+				$fileType = pathinfo($assetFilename, PATHINFO_EXTENSION);
+
+				$genreId = $this->_getGenreId($this->getContextId(), $fileType);
+				$this->_createDependentFile($genreId, $submission, $insertedSubmissionFile, $userId, $fileType, $fileName, \SUBMISSION_FILE_DEPENDENT, \ASSOC_TYPE_SUBMISSION_FILE, false, $insertedSubmissionFile->getFileId(), false, $dependentFilePath);
+			}
+		}
+
+		foreach ($this->select('//graphic') as $asset) {
+			$assetFilename = $asset->getAttribute('xlink:href');
+			$dependentFilePath = dirname($filename) . DIRECTORY_SEPARATOR . $assetFilename;
+			if (file_exists($dependentFilePath)) {
+				$fileType = pathinfo($dependentFilePath, PATHINFO_EXTENSION);
+
+				$genreId = $this->_getGenreId($this->getContextId(), $fileType);
+				$this->_createDependentFile($genreId, $submission, $insertedSubmissionFile, $userId, $fileType, $assetFilename, \SUBMISSION_FILE_DEPENDENT, \ASSOC_TYPE_SUBMISSION_FILE, false, $insertedSubmissionFile->getFileId(), false, $dependentFilePath);
+			}
+		}
+
+	}
+
+
+	/**
+	 * Creates a dependent file
+	 *
+	 * @param $genreId  int
+	 * @param $submission Submission
+	 * @param $submissionFile SubmissionFile
+	 * @param $userId int
+	 * @param $fileType string
+	 * @param $fileName string
+	 * @param bool $fileStage
+	 * @param bool $assocType
+	 * @param bool $sourceRevision
+	 * @param bool $assocId
+	 * @param bool $sourceFileId
+	 * @param $filePath string
+	 * @return void
+	 */
+	protected function _createDependentFile($genreId, $submission, $submissionFile, $userId, $fileType, $fileName, $fileStage = false, $assocType = false, $sourceRevision = false, $assocId = false, $sourceFileId = false, $filePath) {
+
+		$fileSize = filesize($filePath);
+
+		$submissionFileDao = \DAORegistry::getDAO('SubmissionFileDAO');
+		$newFile = $submissionFileDao->newDataObjectByGenreId($genreId);
+		$newFile->setSubmissionId($submission->getId());
+		$newFile->setSubmissionLocale($submission->getLocale());
+		$newFile->setGenreId($genreId);
+		$newFile->setFileStage($fileStage);
+		$newFile->setDateUploaded(\Core::getCurrentDate());
+		$newFile->setDateModified(\Core::getCurrentDate());
+		$newFile->setUploaderUserId($userId);
+		$newFile->setFileSize($fileSize);
+		$newFile->setFileType($fileType);
+
+		if (isset($fileName)) $newFile->setOriginalFileName($fileName);
+		if (isset($fileName)) $newFile->setName($fileName, $submission->getLocale());
+		if (isset($assocType)) $newFile->setAssocType($assocType);
+		if (isset($sourceRevision)) $newFile->setSourceRevision($sourceRevision);
+		if (isset($assocId)) $newFile->setAssocId($assocId);
+		if (isset($sourceFileId)) $newFile->setSourceFileId($sourceFileId);
+
+		$insertedMediaFile = $submissionFileDao->insertObject($newFile, $filePath);
+
+	}
+
+	/**
+	 * @param $contextId
+	 * @param $extension
+	 * @return int
+	 */
+	private function _getGenreId($contextId, $extension) {
+
+		$genreDao = \DAORegistry::getDAO('GenreDAO');
+		$genres = $genreDao->getByDependenceAndContextId(true, $contextId);
+
+		while ($candidateGenre = $genres->next()) {
+			if ($extension) {
+				if ($candidateGenre->getKey() == 'IMAGE') {
+					$genreId = $candidateGenre->getId();
+					break;
+				}
+			} else {
+				if ($candidateGenre->getKey() == 'MULTIMEDIA') {
+					$genreId = $candidateGenre->getId();
+					break;
+				}
+			}
+		}
+		return $genreId;
+	}
+
 	/**
 	 * Inserts the PDF galley
 	 * @param \Publication $publication
