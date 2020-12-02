@@ -6,6 +6,7 @@ Plugin to import A++ and JATS articles into OJS 3.2.1 or newer
 ### Import Files
 To get started you will need to request an export archive of your journal article metadata (metadata.xml) and galley files (fulltext.pdf) for all published articles.
 The plugin supports the following XML document types:
+- NLM: `<!DOCTYPE article SYSTEM "-//NLM//DTD Journal Archiving with OASIS Tables v3.0 20080202//EN" "http://dtd.nlm.nih.gov/archiving/3.0/archive-oasis-article3.dtd">`
 - JATS: `<!DOCTYPE article PUBLIC "-//EDP//DTD EDP Publishing JATS v1.0 20130606//EN" "JATS-edppublishing1.dtd">`
 - A++: `<!DOCTYPE Publisher PUBLIC "-//Springer-Verlag//DTD A++ V2.4//EN" "http://devel.springer.de/A++/V2.4/DTD/A++V2.4.dtd">`
 

@@ -22,11 +22,11 @@ class Parser extends BaseParser {
 
 	/**
 	 * Retrieves the DOCTYPE
-	 * @return \DOMDocumentType
+	 * @return array \DOMDocumentType[]
 	 */
-	public function getDocType(): \DOMDocumentType
+	public function getDocType(): array
 	{
-		return (new \DOMImplementation)->createDocumentType('Publisher', '-//Springer-Verlag//DTD A++ V2.4//EN', 'http://devel.springer.de/A++/V2.4/DTD/A++V2.4.dtd');
+		return [(new \DOMImplementation)->createDocumentType('Publisher', '-//Springer-Verlag//DTD A++ V2.4//EN', 'http://devel.springer.de/A++/V2.4/DTD/A++V2.4.dtd')];
 	}
 
 	/**

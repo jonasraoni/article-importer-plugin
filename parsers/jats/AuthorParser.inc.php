@@ -26,8 +26,8 @@ trait AuthorParser {
 	{
 		$authorDao = \DAORegistry::getDAO('AuthorDAO');
 		$firstAuthor = null;
-		foreach ($this->select("front/article-meta/contrib-group[@content-type='authors']/contrib") as $node) {
-			$author = $this->_processAuthor($publication, $node, ++$index);
+		foreach ($this->select("front/article-meta/contrib-group[@content-type='authors']/contrib|front/article-meta/contrib-group/contrib[@contrib-type='author']") as $node) {
+			$author = $this->_processAuthor($publication, $node);
 			$firstAuthor ?? $firstAuthor = $author;
 		}
 		// If there's no authors, create a default author
@@ -43,7 +43,7 @@ trait AuthorParser {
 	 */
 	private function _processAuthor(\Publication $publication, \DOMNode $authorNode): \Author
 	{
-		$node = $this->selectFirst('name', $authorNode);
+		$node = $this->selectFirst('name|string-name', $authorNode);
 		
 		$firstName = $this->selectText('given-names', $node);
 		$lastName = $this->selectText('surname', $node);

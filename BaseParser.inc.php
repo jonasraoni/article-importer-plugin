@@ -81,9 +81,9 @@ abstract class BaseParser {
 
 	/**
 	 * Retrieves the DOCTYPE
-	 * @return \DOMDocumentType
+	 * @return array \DOMDocumentType[]
 	 */
-	public abstract function getDocType(): \DOMDocumentType;
+	public abstract function getDocType(): array;
 
 	/**
 	 * Executes the parser
@@ -118,8 +118,15 @@ abstract class BaseParser {
 
 		// Checks whether the loaded document is supported by the parser (the doctype should match)
 		$docType = $this->_document->doctype;
-		$supportedDocType = $this->getDocType();
-		if ([$docType->systemId, $docType->publicId, $docType->name] != [$supportedDocType->systemId, $supportedDocType->publicId, $supportedDocType->name]) {
+		$supportedDocTypes = $this->getDocType();
+		$found = false;
+		foreach ($supportedDocTypes as $supportedDocType) {
+			if ([$docType->systemId, $docType->publicId, $docType->name] == [$supportedDocType->systemId, $supportedDocType->publicId, $supportedDocType->name]) {
+				$found = true;
+				break;
+			}
+		}
+		if (!$found) {
 			throw new InvalidDocTypeException(__('plugins.importexport.articleImporter.invalidDoctype'));
 		}
 
