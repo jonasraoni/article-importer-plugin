@@ -29,6 +29,46 @@ where:
 
 All `#` designations will be treated as numeric values; e.g. 'no.01-02' will be interpreted as "1".
 
+If importing JATS, the original metadata XML will be added as a production ready file.  Dependent files as named in the XML (via `asset` or `graphic` elements) will be appended, if the files are found in the article folder.
+
+Example structure:
+```tree-view
+xml/
+ ├── vol1/
+ │    ├── i1/
+ │    │   ├── cover.tif
+ │    │   ├── 1/
+ │    │   │   ├── metadata.xml
+ │    │   │   ├── fulltext.pdf
+ │    │   │   └── table.png
+ │    │   ├── 2/
+ │    │   │   ├── metadata.xml
+ │    │   │   └── fulltext.pdf
+ │    │   └── 3/
+ │    │       ├── metadata.xml
+ │    │       ├── fulltext.pdf
+ │    │       └── images/
+ │    │           ├── graph1.jpg
+ │    │           ├── graph2.jpg
+ │    │           └── graph3.jpg
+ │    ├── i2/
+ │    │   ├── 10/
+ │    │   │   ├── metadata.xml
+ │    │   │   └── fulltext.pdf
+ │    │   └── 15/
+ │    │       ├── metadata.xml
+ │    │       └── fulltext.pdf
+ │    └── ...
+ └── vol2/
+      ├── i1/
+      │   ├── cover.jpg
+      │   ├── 1/
+      │   │   ├── metadata.xml
+      │   │   └── fulltext.pdf
+      │   └── ...
+      └── ...
+```
+
 ### Plugin installation
 This plugin will need to be installed in your **OJS 3.2.1 or newer** installation:
 - Ensure that the plugin branch/version matches your version of OJS
