@@ -103,7 +103,11 @@ trait PublicationParser {
 		}
 
 		// Set public IDs
+		$pubIdPlugins = false;
 		foreach ($this->getPublicIds() as $type => $value) {
+			if ($type !== 'publisher-id' && !$pubIdPlugins) {
+				$pubIdPlugins = \PluginRegistry::loadCategory('pubIds', true, $this->getContextId());
+			}
 			$publication->setData('pub-id::' . $type, $value);
 		}
 
