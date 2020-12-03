@@ -88,7 +88,7 @@ class ArticleEntry {
 	 * Returns the path to the folder containing the article files
 	 * @return \SplFileInfo
 	 */
-	public function getSubmissionPathInfo(): string
+	public function getSubmissionPathInfo(): \SplFileInfo
 	{
 		return $this->getSubmissionFile()->getPathInfo();
 	}

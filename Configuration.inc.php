@@ -212,7 +212,7 @@ class Configuration {
 	 * Retrieves the base name for an issue cover file
 	 * @return string
 	 */
-	public function getIssueCoverFilename(): array
+	public function getIssueCoverFilename(): string
 	{
 		return $this->_issueCoverFilename;
 	}

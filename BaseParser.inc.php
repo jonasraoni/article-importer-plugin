@@ -288,8 +288,8 @@ abstract class BaseParser {
 	public function setIssueCover(string $issueFolder, \Issue &$issue) {
 		$issueDao = \DAORegistry::getDAO('IssueDAO');
 		$issueCover = null;
-		foreach ($this->getConfiguration->getImageExtensions() as $ext) {
-			$checkFile = $issueFolder.DIRECTORY_SEPARATOR.$this->getConfiguration->getIssueCoverFilename().'.'.$ext;
+		foreach ($this->getConfiguration()->getImageExtensions() as $ext) {
+			$checkFile = $issueFolder.DIRECTORY_SEPARATOR.$this->getConfiguration()->getIssueCoverFilename().'.'.$ext;
 			if (file_exists($checkFile)) {
 				$issueCover = $checkFile;
 				break;
