@@ -269,4 +269,33 @@ abstract class BaseParser {
 		}
 		return $callback($node, $data);
 	}
+
+	/**
+	 * Looks in $issueFolder for a cover image, and applies it to $issue if found
+	 * @param string $issueFolder
+	 * @param \Issue $issue
+	 * @return void
+	 */
+	public function setIssueCover(string $issueFolder, \Issue &$issue) {
+		$issueDao = \DAORegistry::getDAO('IssueDAO');
+		$issueCover = null;
+		foreach ($this->getConfiguration->getImageExtensions() as $ext) {
+			$checkFile = $issueFolder.DIRECTORY_SEPARATOR.$this->getConfiguration->getIssueCoverFilename().'.'.$ext;
+			if (file_exists($checkFile)) {
+				$issueCover = $checkFile;
+				break;
+			}
+		}
+		if ($issueCover) {
+			import('classes.file.PublicFileManager');
+			$publicFileManager = new \PublicFileManager();
+			$fileparts = explode('.', $issueCover);
+			$ext = array_pop($fileparts);
+			$newFileName = 'cover_issue_' . $issue->getId() . '_' . $this->getLocale() . '.' . $ext;
+			$publicFileManager->copyContextFile($this->getContextId(), $issueCover, $newFileName);
+			$issue->setCoverImage($newFileName, $this->getLocale());
+			$issueDao->updateObject($issue);	
+		}
+	}
+	
 }

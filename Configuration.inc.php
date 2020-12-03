@@ -35,6 +35,10 @@ class Configuration {
 	private $_authorGroupId;
 	/** @var \Genre Submission genre instance */
 	private $_genre;
+	/** @var string[] File extensions recognized as images */
+	private $_imageExt;
+	/** @var string base filename for issue covers
+	private $_issueCoverFilename;
 
 	/**
 	 * Constructor
@@ -91,6 +95,9 @@ class Configuration {
 
 		// Retrieves the genre for submissions
 		$this->_genre = \DAORegistry::getDAO('GenreDAO')->getByKey('SUBMISSION', $this->_context->getId());
+
+		$this->_imageExt = array('tif', 'tiff', 'png', 'jpg', 'jpeg');
+		$this->_issueCoverFilename = 'cover';
 	}
 
 	/**
@@ -190,5 +197,23 @@ class Configuration {
 	public function getDefaultSectionName(): string
 	{
 		return $this->_defaultSectionName;
+	}
+
+	/**
+	 * Retrieves the array of known image extensions
+	 * @return string[]
+	 */
+	public function getImageExtensions(): array
+	{
+		return $this->_imageExt;
+	}
+
+	/**
+	 * Retrieves the base name for an issue cover file
+	 * @return string
+	 */
+	public function getIssueCoverFilename(): array
+	{
+		return $this->_issueCoverFilename;
 	}
 }
