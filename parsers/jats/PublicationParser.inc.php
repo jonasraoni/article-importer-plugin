@@ -141,7 +141,7 @@ trait PublicationParser {
 		$filename = $splfile->getPathname();
 
 		$genreId = \GENRE_CATEGORY_DOCUMENT;
-		$fileSize = filesize($filename);
+		$fileSize = $splfile->getSize();
 		$fileType = "text/xml";
 		$fileStage = \SUBMISSION_FILE_PRODUCTION_READY;
 		$userId = $this->getConfiguration()->getUser()->getId();
@@ -164,28 +164,15 @@ trait PublicationParser {
 
 		$insertedSubmissionFile = $submissionFileDao->insertObject($newSubmissionFile, $filename);
 
-		foreach ($this->select('//asset') as $asset) {
-			$assetFilename = $asset->getAttribute('path');
+		foreach ($this->select('//asset|//graphic') as $asset) {
+			$assetFilename = $asset->getAttribute( $asset->nodeName == 'path' ? 'href' : 'xlink:href' );
 			$dependentFilePath = dirname($filename) . DIRECTORY_SEPARATOR . $assetFilename;
 			if (file_exists($dependentFilePath)) {
 				$fileType = pathinfo($assetFilename, PATHINFO_EXTENSION);
-
-				$genreId = $this->_getGenreId($this->getContextId(), $fileType);
-				$this->_createDependentFile($genreId, $submission, $insertedSubmissionFile, $userId, $fileType, $fileName, \SUBMISSION_FILE_DEPENDENT, \ASSOC_TYPE_SUBMISSION_FILE, false, $insertedSubmissionFile->getFileId(), false, $dependentFilePath);
-			}
-		}
-
-		foreach ($this->select('//graphic') as $asset) {
-			$assetFilename = $asset->getAttribute('xlink:href');
-			$dependentFilePath = dirname($filename) . DIRECTORY_SEPARATOR . $assetFilename;
-			if (file_exists($dependentFilePath)) {
-				$fileType = pathinfo($dependentFilePath, PATHINFO_EXTENSION);
-
 				$genreId = $this->_getGenreId($this->getContextId(), $fileType);
 				$this->_createDependentFile($genreId, $submission, $insertedSubmissionFile, $userId, $fileType, $assetFilename, \SUBMISSION_FILE_DEPENDENT, \ASSOC_TYPE_SUBMISSION_FILE, false, $insertedSubmissionFile->getFileId(), false, $dependentFilePath);
 			}
 		}
-
 	}
 
 
@@ -231,32 +218,6 @@ trait PublicationParser {
 
 		$insertedMediaFile = $submissionFileDao->insertObject($newFile, $filePath);
 
-	}
-
-	/**
-	 * @param $contextId
-	 * @param $extension
-	 * @return int
-	 */
-	private function _getGenreId($contextId, $extension) {
-
-		$genreDao = \DAORegistry::getDAO('GenreDAO');
-		$genres = $genreDao->getByDependenceAndContextId(true, $contextId);
-
-		while ($candidateGenre = $genres->next()) {
-			if ($extension) {
-				if ($candidateGenre->getKey() == 'IMAGE') {
-					$genreId = $candidateGenre->getId();
-					break;
-				}
-			} else {
-				if ($candidateGenre->getKey() == 'MULTIMEDIA') {
-					$genreId = $candidateGenre->getId();
-					break;
-				}
-			}
-		}
-		return $genreId;
 	}
 
 	/**

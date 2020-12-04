@@ -29,6 +29,8 @@ where:
 
 All `#` designations will be treated as numeric values; e.g. 'no.01-02' will be interpreted as "1".
 
+The article folder must have only one XML file, with the extension of `.xml` or `.meta`, and only one fulltext PDF file, with the extension of `.pdf`.
+
 If importing JATS, the original metadata XML will be added as a production ready file.  Dependent files as named in the XML (via `asset` or `graphic` elements) will be appended, if the files are found in the article folder.
 
 Example structure:
@@ -42,8 +44,8 @@ xml/
  │    │   │   ├── fulltext.pdf
  │    │   │   └── table.png
  │    │   ├── 2/
- │    │   │   ├── metadata.xml
- │    │   │   └── fulltext.pdf
+ │    │   │   ├── jats.xml
+ │    │   │   └── article.pdf
  │    │   └── 3/
  │    │       ├── metadata.xml
  │    │       ├── fulltext.pdf
@@ -53,8 +55,8 @@ xml/
  │    │           └── graph3.jpg
  │    ├── i2/
  │    │   ├── 10/
- │    │   │   ├── metadata.xml
- │    │   │   └── fulltext.pdf
+ │    │   │   ├── 10.meta
+ │    │   │   └── 10.pdf
  │    │   └── 15/
  │    │       ├── metadata.xml
  │    │       └── fulltext.pdf

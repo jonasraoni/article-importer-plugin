@@ -29,6 +29,8 @@ abstract class BaseParser {
 	private $_contextId;
 	/** @var string Default locale, grabbed from the context */
 	private $_locale;
+	/** @var int[] cache of genres by context id and extension */
+	private $_cachedGenres;
 
 	/**
 	 * Constructor
@@ -276,4 +278,29 @@ abstract class BaseParser {
 		}
 		return $callback($node, $data);
 	}
+
+	/**
+	 * Find a Genre ID for a context and extension
+	 * @param $contextId
+	 * @param $extension
+	 * @return int
+	 */
+	protected function _getGenreId($contextId, $extension) {
+
+		if (isset($this->_cachedGenres[$contextId][$extension])) {
+			return $this->_cachedGenres[$contextId][$extension];
+		}
+
+		$genreDao = \DAORegistry::getDAO('GenreDAO');
+		if (in_array($extension, $this->getConfiguration()->getImageExtensions())) {
+			$genre = $genreDao->getByKey('IMAGE', $contextId);
+			$genreId = $genre->getId();
+		} else {
+			$genre = $genreDao->getByKey('MULTIMEDIA', $contextId);
+			$genreId = $genre->getId();
+		}
+		$this->_cachedGenres[$contextId][$extension] = $genreId;
+		return $genreId;
+	}
+
 }
