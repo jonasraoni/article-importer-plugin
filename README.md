@@ -29,8 +29,6 @@ where:
 
 All `#` designations will be treated as numeric values; e.g. 'no.01-02' will be interpreted as "1".
 
-### Plugin installation
-
 The article folder must have only one XML file, with the extension of `.xml` or `.meta`, and only one fulltext PDF file, with the extension of `.pdf`.
 
 A file named cover.tiff, cover.tif, cover.jpeg, cover.jpg, or cover.png may be placed in the `iss#` folder, and will become the issue cover image, if present.
