@@ -117,6 +117,8 @@ trait PublicationParser {
 		$publication->setData('copyrightYear', $this->selectText('front/article-meta/permissions/copyright-year') ?: $publicationDate->format('Y'));
 		$publication->setData('licenseURL', null);
 
+		$publication = $this->_processCitations($publication);
+
 		// Inserts the publication and updates the submission
 		$publication = \Services::get('publication')->add($publication, \Application::get()->getRequest());
 
@@ -133,9 +135,30 @@ trait PublicationParser {
 
 		return $publication;
 	}
-		
+			
 	/**
-	 * Inserts the PDF galley
+	 * Inserts citations
+	 * @param \Publication $publication
+	 * @return \Publication
+	 */
+	private function _processCitations(\Publication $publication): \Publication
+	{
+		$citationText = '';
+		foreach ($this->select('/article/back/ref-list/ref') as $citation) {
+			$document = new \DOMDocument();
+			$document->preserveWhiteSpace = false;
+			$document->loadXML($citation->C14N());
+			$document->documentElement->normalize();
+			$citationText .= $document->documentElement->textContent ."\n";
+		}
+		if ($citationText) {
+			$publication->setData('citationsRaw', $citationText);
+		}
+		return $publication;
+	}
+
+	/**
+	 * Inserts the XML as a production ready file
 	 * @param \Publication $publication
 	 */
 	private function _insertXMLSubmissionFile(\Publication $publication): void
