@@ -47,6 +47,12 @@ trait AuthorParser {
 		
 		$firstName = $this->selectText('given-names', $node);
 		$lastName = $this->selectText('surname', $node);
+		if ($lastName && !$firstName) {
+			$firstName = $lastName;
+			$lastName = '';
+		} else if (!$lastName && !$firstName) {
+			$firstName = $this->getConfiguration()->getContext()->getName($this->getLocale());
+		}
 		$email = null;
 		$affiliation = null;
 
@@ -72,28 +78,6 @@ trait AuthorParser {
 		$author->setData('affiliation', $affiliation, $this->getLocale());
 		$author->setData('seq', $this->_authorCount + 1);
 		$author->setData('publicationId', $publication->getId());
-		$author->setData('includeInBrowse', true);
-		$author->setData('primaryContact', !$this->_authorCount);
-		$author->setData('userGroupId', $this->getConfiguration()->getAuthorGroupId());
-
-		$authorDao->insertObject($author);
-		++$this->_authorCount;
-		return $author;
-	}
-
-	/**
-	 * Creates a default author for articles with no authors
-	 * @param \Publication $publication
-	 * @return \Author
-	 */
-	private function _createDefaultAuthor(\Publication $publication): \Author
-	{
-		$authorDao = \DAORegistry::getDAO('AuthorDAO');
-		$author = $authorDao->newDataObject();
-		$author->setData('familyName', $this->getConfiguration()->getContext()->getName($this->getLocale()), $this->getLocale());
-		$author->setData('seq', $this->_authorCount + 1);
-		$author->setData('publicationId', $publication->getId());
-		$author->setData('email', $this->getConfiguration()->getEmail());
 		$author->setData('includeInBrowse', true);
 		$author->setData('primaryContact', !$this->_authorCount);
 		$author->setData('userGroupId', $this->getConfiguration()->getAuthorGroupId());

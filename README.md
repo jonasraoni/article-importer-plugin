@@ -110,6 +110,8 @@ where:
 
 Due to limitations with exported XML metadata, the plugin imports published articles in sequential order. Imported articles may need to be further sorted in their respective issue’s table of contents in OJS. In addition, while the plugin attempts to preserve issue sections, some section names and assignments may need correction following the import process.
 
+If no author information is contained in the metadata, the Journal's name will be used as the Author's name.
+
 Please note the import plugin is intended for journal content only and does not support the migration of other formats.
 
 ## Bugs and Enhancements
