@@ -332,4 +332,25 @@ abstract class BaseParser {
 		return $genreId;
 	}
 
+	/**
+	 * Creates a default author for articles with no authors
+	 * @param \Publication $publication
+	 * @return \Author
+	 */
+	protected function _createDefaultAuthor(\Publication $publication): \Author
+	{
+		$authorDao = \DAORegistry::getDAO('AuthorDAO');
+		$author = $authorDao->newDataObject();
+		$author->setData('givenName', $this->getConfiguration()->getContext()->getName($this->getLocale()), $this->getLocale());
+		$author->setData('seq', 1);
+		$author->setData('publicationId', $publication->getId());
+		$author->setData('email', $this->getConfiguration()->getEmail());
+		$author->setData('includeInBrowse', true);
+		$author->setData('primaryContact', true);
+		$author->setData('userGroupId', $this->getConfiguration()->getAuthorGroupId());
+
+		$authorDao->insertObject($author);
+		return $author;
+	}
+
 }
