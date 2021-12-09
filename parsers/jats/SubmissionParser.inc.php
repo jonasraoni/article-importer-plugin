@@ -14,6 +14,8 @@
 
 namespace PKP\Plugins\ImportExport\ArticleImporter\Parsers\Jats;
 
+use PKP\Plugins\ImportExport\ArticleImporter\ArticleImporterPlugin;
+
 trait SubmissionParser {
 	 /** @var \Submission Submission instance */
 	private $_submission;
@@ -46,7 +48,7 @@ trait SubmissionParser {
 		$article->setData('sectionId', $this->getSection()->getId());
 
 		$date = $this->getDateFromNode($this->selectFirst("front/article-meta/history/date[@date-type='received']")) ?: $this->getPublicationDate();
-		$article->setData('dateSubmitted', $date->format(\DateTime::RFC3339));
+		$article->setData('dateSubmitted', $date->format(ArticleImporterPlugin::DATETIME_FORMAT));
 
 		// Creates the submission
 		$this->_submission = \Services::get('submission')->add($article, \Application::get()->getRequest());

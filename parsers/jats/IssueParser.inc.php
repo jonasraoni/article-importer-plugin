@@ -14,12 +14,14 @@
 
 namespace PKP\Plugins\ImportExport\ArticleImporter\Parsers\Jats;
 
+use PKP\Plugins\ImportExport\ArticleImporter\ArticleImporterPlugin;
+
 trait IssueParser {
 	/** @var bool True if the issue was created by this instance */
 	private $_isIssueOwner;
 	/** @var \Issue Issue instance */
 	private $_issue;
-	
+
 	/**
 	 * Rollbacks the operation
 	 */
@@ -68,7 +70,7 @@ trait IssueParser {
 			$issue->setData('year', (int) $publicationDate->format('Y'));
 			$issue->setData('published', true);
 			$issue->setData('current', false);
-			$issue->setData('datePublished', $publicationDate->format(\DateTime::RFC3339));
+			$issue->setData('datePublished', $publicationDate->format(ArticleImporterPlugin::DATETIME_FORMAT));
 			$issue->setData('accessStatus', \ISSUE_ACCESS_OPEN);
 			$issue->setData('showVolume', true);
 			$issue->setData('showNumber', true);
@@ -79,7 +81,7 @@ trait IssueParser {
 
 			$issueFolder = (string)$entry->getSubmissionPathInfo()->getPathInfo();
 			$this->setIssueCover($issueFolder, $issue);
-			
+
 			$this->_isIssueOwner = true;
 
 			$this->_issue = $issue;
@@ -91,7 +93,7 @@ trait IssueParser {
 	/**
 	 * Retrieves the issue publication date
 	 * @return \DateTimeImmutable
-	 */	
+	 */
 	public function getIssuePublicationDate(): \DateTimeImmutable
 	{
 		return new \DateTimeImmutable($this->getIssue()->getData('datePublished'));

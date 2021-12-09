@@ -22,6 +22,8 @@ import('lib.pkp.classes.xml.XMLParser');
 use \PKP\Plugins\ImportExport\ArticleImporter\Exceptions\ArticleSkippedException;
 
 class ArticleImporterPlugin extends \ImportExportPlugin {
+
+	public const DATETIME_FORMAT = 'Y-m-d H:i:s';
 	/**
 	 * Registers a custom autoloader to handle the plugin namespace
 	 */
@@ -66,7 +68,7 @@ class ArticleImporterPlugin extends \ImportExportPlugin {
 				[Parsers\APlusPlus\Parser::class, Parsers\Jats\Parser::class],
 				$contextPath, $username, $editorUsername, $email, $importPath
 			);
-			
+
 			$this->_writeLine(__('plugins.importexport.articleImporter.importStart'));
 
 			$sectionDao = \Application::getSectionDAO();
@@ -92,7 +94,7 @@ class ArticleImporterPlugin extends \ImportExportPlugin {
 					++$failed;
 				}
 			}
-			
+
 			// Resequences issue orders
 			if ($imported) {
 				$this->resequenceIssues($configuration);
