@@ -14,6 +14,8 @@
 
 namespace PKP\Plugins\ImportExport\ArticleImporter\Parsers\Jats;
 
+use PKP\Plugins\ImportExport\ArticleImporter\ArticleImporterPlugin;
+
 trait PublicationParser {
 	/**
 	 * Parse, import and retrieve the publication
@@ -30,7 +32,7 @@ trait PublicationParser {
 		$publication->setData('version', 1);
 		$publication->setData('seq', $this->getSubmission()->getId());
 		$publication->setData('accessStatus', \ARTICLE_ACCESS_OPEN);
-		$publication->setData('datePublished', $publicationDate->format(\DateTime::RFC3339));
+		$publication->setData('datePublished', $publicationDate->format(ArticleImporterPlugin::DATETIME_FORMAT));
 		$publication->setData('sectionId', $this->getSection()->getId());
 		$publication->setData('issueId', $this->getIssue()->getId());
 		$publication->setData('urlPath', null);
@@ -44,7 +46,7 @@ trait PublicationParser {
 
 		$hasTitle = false;
 		$publicationLocale = null;
-		
+
 		// Set title
 		if($node = $this->selectFirst('front/article-meta/title-group/article-title')) {
 			$locale = $this->getLocale($node->getAttribute('xml:lang'));
@@ -135,7 +137,7 @@ trait PublicationParser {
 
 		return $publication;
 	}
-			
+
 	/**
 	 * Inserts citations
 	 * @param \Publication $publication
