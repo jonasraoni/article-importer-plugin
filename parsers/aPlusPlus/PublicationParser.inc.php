@@ -14,7 +14,9 @@
 
 namespace PKP\Plugins\ImportExport\ArticleImporter\Parsers\APlusPlus;
 
+use APP\Services\SubmissionFileService;
 use PKP\Plugins\ImportExport\ArticleImporter\ArticleImporterPlugin;
+use PKP\Services\PKPFileService;
 
 trait PublicationParser {
 	/**
@@ -153,21 +155,41 @@ trait PublicationParser {
 		$representation->setData('seq', 1);
 		$representation->setData('label', 'PDF');
 		$representation->setData('locale', $this->getLocale());
-		$representationDao->insertObject($representation);
+		$newRepresentationId = $representationDao->insertObject($representation);
 
 		// Add the PDF file and link representation with submission file
-		$submissionFile = (new \SubmissionFileManager($this->getContextId(), $this->getSubmission()->getId()))
-			->copySubmissionFile(
-				$file->getPathname(),
-				\SUBMISSION_FILE_PROOF,
-				$this->getConfiguration()->getEditor()->getId(),
-				null,
-				$this->getConfiguration()->getSubmissionGenre()->getId(),
-				\ASSOC_TYPE_REPRESENTATION,
-				$representation->getId()
-			);
-		$representation->setFileId($submissionFile->getFileId());
+		/** @var SubmissionFileService $submissionFileService */
+		$submissionFileService = \Services::get('submissionFile');
+		/** @var PKPFileService $fileService */
+		$fileService = \Services::get('file');
+		$submission = $this->getSubmission();
+
+		$submissionDir = $submissionFileService->getSubmissionDir($submission->getData('contextId'), $submission->getId());
+		$newFileId = $fileService->add(
+			$file->getPathname(),
+			$submissionDir . '/' . uniqid() . '.pdf'
+		);
+
+		/* @var $submissionFileDao \SubmissionFileDAO */
+		$submissionFileDao = \DAORegistry::getDAO('SubmissionFileDAO');
+		$newSubmissionFile = $submissionFileDao->newDataObject();
+		$newSubmissionFile->setData('submissionId', $submission->getId());
+		$newSubmissionFile->setData('fileId', $newFileId);
+		$newSubmissionFile->setData('genreId', $this->getConfiguration()->getSubmissionGenre()->getId());
+		$newSubmissionFile->setData('fileStage', \SUBMISSION_FILE_PROOF);
+		$newSubmissionFile->setData('uploaderUserId', $this->getConfiguration()->getEditor()->getId());
+		$newSubmissionFile->setData('createdAt', \Core::getCurrentDate());
+		$newSubmissionFile->setData('updatedAt', \Core::getCurrentDate());
+		$newSubmissionFile->setData('assocType', \ASSOC_TYPE_REPRESENTATION);
+		$newSubmissionFile->setData('assocId', $newRepresentationId);
+		$newSubmissionFile->setData('name', $filename, $this->getLocale());
+		$submissionFile = $submissionFileService->add($newSubmissionFile, \Application::get()->getRequest());
+
+		$representation = $representationDao->getById($newRepresentationId);
+		$representation->setFileId($submissionFile->getData('fileId'));
 		$representationDao->updateObject($representation);
+
+		unset($newFileId);
 	}
 
 	/**

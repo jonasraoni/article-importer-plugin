@@ -14,7 +14,9 @@
 
 namespace PKP\Plugins\ImportExport\ArticleImporter\Parsers\Jats;
 
+use APP\Services\SubmissionFileService;
 use PKP\Plugins\ImportExport\ArticleImporter\ArticleImporterPlugin;
+use PKP\Services\PKPFileService;
 
 trait PublicationParser {
 	/**
@@ -165,33 +167,40 @@ trait PublicationParser {
 	 */
 	private function _insertXMLSubmissionFile(\Publication $publication): void
 	{
-		import('lib.pkp.classes.file.SubmissionFileManager');
 		$splfile = $this->getArticleEntry()->getMetadataFile();
 		$filename = $splfile->getPathname();
 
 		$genreId = \GENRE_CATEGORY_DOCUMENT;
-		$fileSize = $splfile->getSize();
-		$fileType = "text/xml";
 		$fileStage = \SUBMISSION_FILE_PRODUCTION_READY;
 		$userId = $this->getConfiguration()->getUser()->getId();
 
 		$submission = $this->getSubmission();
 
-		$submissionFileDao = \DAORegistry::getDAO('SubmissionFileDAO');
-		$newSubmissionFile = $submissionFileDao->newDataObjectByGenreId($genreId);
-		$newSubmissionFile->setSubmissionId($submission->getId());
-		$newSubmissionFile->setSubmissionLocale($submission->getLocale());
-		$newSubmissionFile->setGenreId($genreId);
-		$newSubmissionFile->setFileStage($fileStage);
-		$newSubmissionFile->setDateUploaded(\Core::getCurrentDate());
-		$newSubmissionFile->setDateModified(\Core::getCurrentDate());
-		$newSubmissionFile->setOriginalFileName($splfile->getFilename());
-		$newSubmissionFile->setUploaderUserId($userId);
-		$newSubmissionFile->setFileSize($fileSize);
-		$newSubmissionFile->setFileType($fileType);
-		$newSubmissionFile->setName($splfile->getFilename(), $submission->getLocale());
+		/** @var SubmissionFileService $submissionFileService */
+		$submissionFileService = \Services::get('submissionFile');
+		/** @var PKPFileService $fileService */
+		$fileService = \Services::get('file');
 
-		$insertedSubmissionFile = $submissionFileDao->insertObject($newSubmissionFile, $filename);
+		$submissionDir = $submissionFileService->getSubmissionDir($submission->getData('contextId'), $submission->getId());
+		$newFileId = $fileService->add(
+			$filename,
+			$submissionDir . '/' . uniqid() . '.xml'
+		);
+
+		/** @var \SubmissionFileDAO $submissionFileDao */
+		$submissionFileDao = \DAORegistry::getDAO('SubmissionFileDAO');
+		$newSubmissionFile = $submissionFileDao->newDataObject();
+		$newSubmissionFile->setData('submissionId', $submission->getId());
+		$newSubmissionFile->setData('fileId', $newFileId);
+		$newSubmissionFile->setData('genreId', $genreId);
+		$newSubmissionFile->setData('fileStage', $fileStage);
+		$newSubmissionFile->setData('uploaderUserId', $this->getConfiguration()->getEditor()->getId());
+		$newSubmissionFile->setData('createdAt', \Core::getCurrentDate());
+		$newSubmissionFile->setData('updatedAt', \Core::getCurrentDate());
+		$newSubmissionFile->setData('name', $splfile->getFilename(), $this->getLocale());
+
+		$submissionFile = $submissionFileService->add($newSubmissionFile, \Application::get()->getRequest());
+		unset($newFileId);
 
 		foreach ($this->select('//asset|//graphic') as $asset) {
 			$assetFilename = $asset->getAttribute( $asset->nodeName == 'path' ? 'href' : 'xlink:href' );
@@ -199,7 +208,7 @@ trait PublicationParser {
 			if (file_exists($dependentFilePath)) {
 				$fileType = pathinfo($assetFilename, PATHINFO_EXTENSION);
 				$genreId = $this->_getGenreId($this->getContextId(), $fileType);
-				$this->_createDependentFile($genreId, $submission, $insertedSubmissionFile, $userId, $fileType, $assetFilename, \SUBMISSION_FILE_DEPENDENT, \ASSOC_TYPE_SUBMISSION_FILE, false, $insertedSubmissionFile->getFileId(), false, $dependentFilePath);
+				$this->_createDependentFile($genreId, $submission, $submissionFile, $userId, $fileType, $assetFilename, \SUBMISSION_FILE_DEPENDENT, \ASSOC_TYPE_SUBMISSION_FILE, false, $submissionFile->getData('fileId'), false, $dependentFilePath);
 			}
 		}
 	}
@@ -209,8 +218,8 @@ trait PublicationParser {
 	 * Creates a dependent file
 	 *
 	 * @param $genreId  int
-	 * @param $submission Submission
-	 * @param $submissionFile SubmissionFile
+	 * @param $submission \Submission
+	 * @param $submissionFile \SubmissionFile
 	 * @param $userId int
 	 * @param $fileType string
 	 * @param $fileName string
@@ -223,30 +232,39 @@ trait PublicationParser {
 	 * @return void
 	 */
 	protected function _createDependentFile($genreId, $submission, $submissionFile, $userId, $fileType, $fileName, $fileStage = false, $assocType = false, $sourceRevision = false, $assocId = false, $sourceFileId = false, $filePath) {
+		/** @var SubmissionFileService $submissionFileService */
+		$submissionFileService = \Services::get('submissionFile');
+		/** @var PKPFileService $fileService */
+		$fileService = \Services::get('file');
 
-		$fileSize = filesize($filePath);
+		$submissionDir = $submissionFileService->getSubmissionDir($submission->getData('contextId'), $submission->getId());
+		$newFileId = $fileService->add(
+			$filePath,
+			$submissionDir . '/' . uniqid() . '.' . $fileType
+		);
 
+		/* @var $submissionFileDao \SubmissionFileDAO */
 		$submissionFileDao = \DAORegistry::getDAO('SubmissionFileDAO');
-		$newFile = $submissionFileDao->newDataObjectByGenreId($genreId);
-		$newFile->setSubmissionId($submission->getId());
-		$newFile->setSubmissionLocale($submission->getLocale());
-		$newFile->setGenreId($genreId);
-		$newFile->setFileStage($fileStage);
-		$newFile->setDateUploaded(\Core::getCurrentDate());
-		$newFile->setDateModified(\Core::getCurrentDate());
-		$newFile->setUploaderUserId($userId);
-		$newFile->setFileSize($fileSize);
-		$newFile->setFileType($fileType);
+		$newSubmissionFile = $submissionFileDao->newDataObject();
+		$newSubmissionFile->setData('submissionId', $submission->getId());
+		$newSubmissionFile->setData('fileId', $newFileId);
+		$newSubmissionFile->setData('fileStage', $fileStage);
+		$newSubmissionFile->setData('genreId', $genreId);
+		$newSubmissionFile->setData('fileStage', $fileStage);
+		$newSubmissionFile->setData('createdAt', \Core::getCurrentDate());
+		$newSubmissionFile->setData('updatedAt', \Core::getCurrentDate());
+		$newSubmissionFile->setData('uploaderUserId', $userId);
 
-		if (isset($fileName)) $newFile->setOriginalFileName($fileName);
-		if (isset($fileName)) $newFile->setName($fileName, $submission->getLocale());
-		if (isset($assocType)) $newFile->setAssocType($assocType);
-		if (isset($sourceRevision)) $newFile->setSourceRevision($sourceRevision);
-		if (isset($assocId)) $newFile->setAssocId($assocId);
-		if (isset($sourceFileId)) $newFile->setSourceFileId($sourceFileId);
+		if (isset($assocType)) $newSubmissionFile->setData('assocType', $assocType);
+		if (isset($assocId)) $newSubmissionFile->setData('assocId', $assocId);
+		$newSubmissionFile->setData('name', $fileName, $this->getLocale());
+		// Expect properties to be stored as empty for artwork metadata
+		$newSubmissionFile->setData('caption', '');
+		$newSubmissionFile->setData('credit', '');
+		$newSubmissionFile->setData('copyrightOwner', '');
+		$newSubmissionFile->setData('terms', '');
 
-		$insertedMediaFile = $submissionFileDao->insertObject($newFile, $filePath);
-
+		$insertedMediaFile = $submissionFileService->add($newSubmissionFile, \Application::get()->getRequest());
 	}
 
 	/**
@@ -260,27 +278,47 @@ trait PublicationParser {
 
 		// Create a representation of the article (i.e. a galley)
 		$representationDao = \Application::getRepresentationDAO();
-		$representation = $representationDao->newDataObject();
-		$representation->setData('publicationId', $publication->getId());
-		$representation->setData('name', $filename, $this->getLocale());
-		$representation->setData('seq', 1);
-		$representation->setData('label', 'PDF');
-		$representation->setData('locale', $this->getLocale());
-		$representationDao->insertObject($representation);
+		$newRepresentation = $representationDao->newDataObject();
+		$newRepresentation->setData('publicationId', $publication->getId());
+		$newRepresentation->setData('name', $filename, $this->getLocale());
+		$newRepresentation->setData('seq', 1);
+		$newRepresentation->setData('label', 'PDF');
+		$newRepresentation->setData('locale', $this->getLocale());
+		$newRepresentationId = $representationDao->insertObject($newRepresentation);
 
 		// Add the PDF file and link representation with submission file
-		$submissionFile = (new \SubmissionFileManager($this->getContextId(), $this->getSubmission()->getId()))
-			->copySubmissionFile(
-				$file->getPathname(),
-				\SUBMISSION_FILE_PROOF,
-				$this->getConfiguration()->getEditor()->getId(),
-				null,
-				$this->getConfiguration()->getSubmissionGenre()->getId(),
-				\ASSOC_TYPE_REPRESENTATION,
-				$representation->getId()
-			);
-		$representation->setFileId($submissionFile->getFileId());
+		/** @var SubmissionFileService $submissionFileService */
+		$submissionFileService = \Services::get('submissionFile');
+		/** @var PKPFileService $fileService */
+		$fileService = \Services::get('file');
+		$submission = $this->getSubmission();
+
+		$submissionDir = $submissionFileService->getSubmissionDir($submission->getData('contextId'), $submission->getId());
+		$newFileId = $fileService->add(
+			$file->getPathname(),
+			$submissionDir . '/' . uniqid() . '.pdf'
+		);
+
+		/* @var $submissionFileDao \SubmissionFileDAO */
+		$submissionFileDao = \DAORegistry::getDAO('SubmissionFileDAO');
+		$newSubmissionFile = $submissionFileDao->newDataObject();
+		$newSubmissionFile->setData('submissionId', $submission->getId());
+		$newSubmissionFile->setData('fileId', $newFileId);
+		$newSubmissionFile->setData('genreId', $this->getConfiguration()->getSubmissionGenre()->getId());
+		$newSubmissionFile->setData('fileStage', \SUBMISSION_FILE_PROOF);
+		$newSubmissionFile->setData('uploaderUserId', $this->getConfiguration()->getEditor()->getId());
+		$newSubmissionFile->setData('createdAt', \Core::getCurrentDate());
+		$newSubmissionFile->setData('updatedAt', \Core::getCurrentDate());
+		$newSubmissionFile->setData('assocType', \ASSOC_TYPE_REPRESENTATION);
+		$newSubmissionFile->setData('assocId', $newRepresentationId);
+		$newSubmissionFile->setData('name', $filename, $this->getLocale());
+		$submissionFile = $submissionFileService->add($newSubmissionFile, \Application::get()->getRequest());
+
+		$representation = $representationDao->getById($newRepresentationId);
+		$representation->setFileId($submissionFile->getData('fileId'));
 		$representationDao->updateObject($representation);
+
+		unset($newFileId);
 	}
 
 	/**
