@@ -16,8 +16,7 @@ namespace PKP\Plugins\ImportExport\ArticleImporter;
 
 import('lib.pkp.classes.plugins.ImportExportPlugin');
 import('lib.pkp.classes.submission.SubmissionFile');
-import('lib.pkp.classes.file.SubmissionFileManager');
-import('lib.pkp.classes.xml.XMLParser');
+import('lib.pkp.classes.file.FileManager');
 
 use \PKP\Plugins\ImportExport\ArticleImporter\Exceptions\ArticleSkippedException;
 
@@ -70,6 +69,12 @@ class ArticleImporterPlugin extends \ImportExportPlugin {
 			);
 
 			$this->_writeLine(__('plugins.importexport.articleImporter.importStart'));
+
+			// FIXME: This attaches the associated user to the request and is a workaround for no users being present
+			// 	when running CLI tools. This assumes that given the username supplied should be used as the
+			//  authenticated user. To revisit later.
+			$user = $configuration->getUser();
+			\Registry::set('user', $user);
 
 			$sectionDao = \Application::getSectionDAO();
 			$lastIssueId = null;
