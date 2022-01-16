@@ -69,7 +69,9 @@ trait AuthorParser
         $authorDao = \DAORegistry::getDAO('AuthorDAO');
         $author = $authorDao->newDataObject();
         $author->setData('givenName', $firstName, $this->getLocale());
-        $author->setData('familyName', $lastName, $this->getLocale());
+        if ($lastName) {
+            $author->setData('familyName', $lastName, $this->getLocale());
+        }
         //$author->setData('preferredPublicName', "", $this->getLocale());
         $author->setData('email', $email ?: $this->getConfiguration()->getEmail());
         $author->setData('affiliation', $affiliation, $this->getLocale());
