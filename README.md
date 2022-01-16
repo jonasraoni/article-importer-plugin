@@ -1,5 +1,5 @@
 # OJS Article Importer Plugin
-Plugin to import A++ and JATS articles into OJS 3.2.1 or newer
+Plugin to import A++ and JATS articles up to OJS 3.3.0
 
 ## Requirements
 

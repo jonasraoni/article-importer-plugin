@@ -4,15 +4,15 @@
 <!--
   * plugins/importexport/articleImporter/version.xml
   *
-  * Copyright (c) 2014-2020 Simon Fraser University
-  * Copyright (c) 2000-2020 John Willinsky
+  * Copyright (c) 2014-2022 Simon Fraser University
+  * Copyright (c) 2000-2022 John Willinsky
   * Distributed under the GNU GPL v3. For full terms see the file docs/COPYING.
   *
   * Plugin version information.
   -->
 <version>
-	<application>articleImporter</application>
-	<type>plugins.importexport</type>
-	<release>1.0.0.1</release>
-	<date>2020-11-23</date>
+    <application>articleImporter</application>
+    <type>plugins.importexport</type>
+    <release>2.0.0.0</release>
+    <date>2021-01-16</date>
 </version>
