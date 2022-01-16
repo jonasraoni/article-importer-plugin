@@ -13,6 +13,6 @@
 <version>
 	<application>articleImporter</application>
 	<type>plugins.importexport</type>
-	<release>1.0.0.1</release>
-	<date>2020-11-23</date>
+	<release>1.1.0.0</release>
+	<date>2022-01-16</date>
 </version>
