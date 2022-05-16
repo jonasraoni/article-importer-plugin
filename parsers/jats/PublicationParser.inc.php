@@ -15,6 +15,7 @@
 namespace PKP\Plugins\ImportExport\ArticleImporter\Parsers\Jats;
 
 use APP\Services\SubmissionFileService;
+use FilesystemIterator;
 use PKP\Plugins\ImportExport\ArticleImporter\ArticleImporterPlugin;
 use PKP\Services\PKPFileService;
 use Publication;
@@ -128,6 +129,10 @@ trait PublicationParser
 
         // Record this XML itself
         $this->_insertXMLSubmissionFile($publication);
+
+        $this->_insertHTMLGalley($publication);
+
+        $publication = \Services::get('publication')->get($publication->getId());
 
         // Publishes the article
         \Services::get('publication')->publish($publication);
@@ -276,7 +281,7 @@ trait PublicationParser
         $newRepresentation->setData('publicationId', $publication->getId());
         $newRepresentation->setData('name', $filename, $this->getLocale());
         $newRepresentation->setData('seq', 1);
-        $newRepresentation->setData('label', 'PDF');
+        $newRepresentation->setData('label', 'Fulltext PDF');
         $newRepresentation->setData('locale', $this->getLocale());
         $newRepresentationId = $representationDao->insertObject($newRepresentation);
 
@@ -387,6 +392,75 @@ trait PublicationParser
             'temporaryFileId' => $temporaryFile->getId(),
             'altText' => 'Publication image'
         ], $this->getLocale());
+    }
+
+    /**
+     * Inserts the HTML as a production ready file
+     */
+    private function _insertHTMLGalley(\Publication $publication): void
+    {
+        $splfile = $this->getArticleEntry()->getHtmlFile();
+		if (!$splfile) {
+			return;
+		}
+
+        // Create a representation of the article (i.e. a galley)
+        $representationDao = \Application::getRepresentationDAO();
+        $newRepresentation = $representationDao->newDataObject();
+        $newRepresentation->setData('publicationId', $publication->getId());
+        $newRepresentation->setData('name', $splfile->getBasename(), $this->getLocale());
+        $newRepresentation->setData('seq', 2);
+        $newRepresentation->setData('label', 'Fulltext HTML');
+        $newRepresentation->setData('locale', $this->getLocale());
+        $newRepresentationId = $representationDao->insertObject($newRepresentation);
+
+        $userId = $this->getConfiguration()->getUser()->getId();
+
+        $submission = $this->getSubmission();
+
+        /** @var SubmissionFileService $submissionFileService */
+        $submissionFileService = \Services::get('submissionFile');
+        /** @var PKPFileService $fileService */
+        $fileService = \Services::get('file');
+
+        $filename = tempnam(sys_get_temp_dir(), 'tmp');
+        file_put_contents($filename, str_replace('src="images/', 'src="', file_get_contents($splfile->getPathname())));
+
+        $submissionDir = $submissionFileService->getSubmissionDir($submission->getData('contextId'), $submission->getId());
+        $newFileId = $fileService->add(
+            $filename,
+            $submissionDir . '/' . uniqid() . '.html'
+        );
+
+        /** @var \SubmissionFileDAO $submissionFileDao */
+        $submissionFileDao = \DAORegistry::getDAO('SubmissionFileDAO');
+        $newSubmissionFile = $submissionFileDao->newDataObject();
+        $newSubmissionFile->setData('submissionId', $submission->getId());
+        $newSubmissionFile->setData('fileId', $newFileId);
+        $newSubmissionFile->setData('genreId', $this->getConfiguration()->getSubmissionGenre()->getId());
+        $newSubmissionFile->setData('fileStage', \SUBMISSION_FILE_PROOF);
+        $newSubmissionFile->setData('uploaderUserId', $this->getConfiguration()->getEditor()->getId());
+        $newSubmissionFile->setData('createdAt', \Core::getCurrentDate());
+        $newSubmissionFile->setData('updatedAt', \Core::getCurrentDate());
+        $newSubmissionFile->setData('assocType', \ASSOC_TYPE_REPRESENTATION);
+        $newSubmissionFile->setData('assocId', $newRepresentationId);
+        $newSubmissionFile->setData('name', $splfile->getBasename(), $this->getLocale());
+
+        $submissionFile = $submissionFileService->add($newSubmissionFile, \Application::get()->getRequest());
+
+        /** @var \SplFileInfo */
+        foreach (is_dir($splfile->getPath()) ? new FilesystemIterator($splfile->getPath() . '/images') : [] as $assetFilename) {
+            if ($assetFilename->isDir()) {
+                throw new \Exception("Unexpected directory {$assetFilename}");
+            }
+            $fileType = $assetFilename->getExtension();
+            $genreId = $this->_getGenreId($this->getContextId(), $fileType);
+            $this->_createDependentFile($genreId, $submission, $submissionFile, $userId, $fileType, $assetFilename->getBasename(), \SUBMISSION_FILE_DEPENDENT, \ASSOC_TYPE_SUBMISSION_FILE, false, $submissionFile->getId(), false, $assetFilename);
+        }
+
+        $representation = $representationDao->getById($newRepresentationId);
+        $representation->setFileId($submissionFile->getData('id'));
+        $representationDao->updateObject($representation);
     }
 
     /**

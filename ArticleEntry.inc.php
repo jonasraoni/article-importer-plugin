@@ -144,4 +144,36 @@ class ArticleEntry
         // If no parser could understand the format
         throw new NoSuitableParserException(__('plugins.importexport.articleImporter.invalidDoctype'));
     }
+
+    /**
+     * Retrieves the HTML galley file
+     *
+     * @throws \Exception Throws if there's more than one
+     */
+    public function getHtmlFile(): ?\SplFileInfo
+    {
+        $count = count($paths = array_filter($this->_files, function ($path) {
+            return preg_match('/\.html$/i', $path);
+        }));
+        if ($count > 1) {
+            throw new \Exception(__('plugins.importexport.articleImporter.unexpectedMetadata', ['count' => $count]));
+        }
+        return reset($paths) ?: null;
+    }
+
+	/**
+     * Retrieves the cover file
+     *
+     * @throws \Exception Throws if there's more than one cover file
+     */
+    public function getSubmissionCoverFile(): ?\SplFileInfo
+    {
+        $count = count($paths = array_filter($this->_files, function ($path) {
+            return preg_match('/article_cover\.[a-z]{3}/i', $path);
+        }));
+        if ($count > 1) {
+            throw new \Exception(__('plugins.importexport.articleImporter.unexpectedMetadata', ['count' => $count]));
+        }
+        return reset($paths) ?: null;
+    }
 }
