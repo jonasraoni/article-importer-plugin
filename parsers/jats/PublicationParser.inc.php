@@ -315,7 +315,7 @@ trait PublicationParser
         $submissionFile = $submissionFileService->add($newSubmissionFile, \Application::get()->getRequest());
 
         $representation = $representationDao->getById($newRepresentationId);
-        $representation->setFileId($submissionFile->getData('fileId'));
+        $representation->setFileId($submissionFile->getData('id'));
         $representationDao->updateObject($representation);
 
         unset($newFileId);
