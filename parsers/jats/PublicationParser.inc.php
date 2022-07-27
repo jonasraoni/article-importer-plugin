@@ -47,15 +47,10 @@ trait PublicationParser
         }
 
         $hasTitle = false;
-        $publicationLocale = null;
 
         // Set title
         if ($node = $this->selectFirst('front/article-meta/title-group/article-title')) {
             $locale = $this->getLocale($node->getAttribute('xml:lang'));
-            // The publication language is defined by the first title node
-            if (!$publicationLocale) {
-                $publicationLocale = $locale;
-            }
             $value = $this->selectText('.', $node);
             $hasTitle = strlen($value);
             $publication->setData('title', $value, $locale);
@@ -70,10 +65,6 @@ trait PublicationParser
         foreach ($this->select('front/article-meta/title-group/trans-title-group') as $node) {
             $locale = $this->getLocale($node->getAttribute('xml:lang'));
             if ($value = $this->selectText('trans-title', $node)) {
-                // The publication language is defined by the first title node
-                if (!$publicationLocale) {
-                    $publicationLocale = $locale;
-                }
                 $hasTitle = true;
                 $publication->setData('title', $value, $locale);
             }
@@ -86,8 +77,7 @@ trait PublicationParser
             throw new \Exception(__('plugins.importexport.articleImporter.articleTitleMissing'));
         }
 
-        $publication->setData('locale', $publicationLocale);
-        $publication->setData('language', \PKPLocale::getIso1FromLocale($publicationLocale));
+        $publication->setData('language', \PKPLocale::getIso1FromLocale($this->getSubmission()->getData('locale')));
 
         // Set abstract
         foreach ($this->select('front/article-meta/abstract|front/article-meta/trans-abstract') as $node) {

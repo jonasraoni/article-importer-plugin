@@ -46,6 +46,7 @@ trait SubmissionParser
         $article->setData('submissionProgress', 0);
         $article->setData('stageId', \WORKFLOW_STAGE_ID_PRODUCTION);
         $article->setData('sectionId', $this->getSection()->getId());
+        $article->setData('locale', $this->getLocale($this->selectText('front/article-meta/title-group/trans-title-group/@xml:lang')));
 
         $date = $this->getDateFromNode($this->selectFirst("front/article-meta/history/date[@date-type='received']")) ?: $this->getPublicationDate();
         $article->setData('dateSubmitted', $date->format(ArticleImporterPlugin::DATETIME_FORMAT));
