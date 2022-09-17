@@ -50,6 +50,7 @@ class ArticleImporterPlugin extends \ImportExportPlugin
      */
     public function executeCLI($scriptName, &$args): void
     {
+        ini_set('memory_limit', -1);
         \SessionManager::getManager();
         // Disable the time limit
         set_time_limit(0);
