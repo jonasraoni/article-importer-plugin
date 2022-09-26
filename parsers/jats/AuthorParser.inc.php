@@ -66,6 +66,8 @@ trait AuthorParser
             }
         }
 
+        $email = $email ?: $this->selectText('email', $node) ?: $this->getConfiguration()->getEmail();
+
         $authorDao = \DAORegistry::getDAO('AuthorDAO');
         $author = $authorDao->newDataObject();
         $author->setData('givenName', $firstName, $this->getLocale());
@@ -73,7 +75,7 @@ trait AuthorParser
             $author->setData('familyName', $lastName, $this->getLocale());
         }
         //$author->setData('preferredPublicName', "", $this->getLocale());
-        $author->setData('email', $email ?: $this->getConfiguration()->getEmail());
+        $author->setData('email', $email);
         $author->setData('affiliation', $affiliation, $this->getLocale());
         $author->setData('seq', $this->_authorCount + 1);
         $author->setData('publicationId', $publication->getId());
