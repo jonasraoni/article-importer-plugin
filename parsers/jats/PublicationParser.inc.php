@@ -113,7 +113,7 @@ trait PublicationParser
         $publication->setData('copyrightHolder', $this->selectText('front/article-meta/permissions/copyright-holder'), $this->getLocale());
         $publication->setData('copyrightNotice', $this->selectText('front/article-meta/permissions/copyright-statement'), $this->getLocale());
         $publication->setData('copyrightYear', $this->selectText('front/article-meta/permissions/copyright-year') ?: $publicationDate->format('Y'));
-        $publication->setData('licenseURL', null);
+        $publication->setData('licenseUrl', $this->selectText('front/article-meta/permissions/license/attribute::xlink:href'));
 
         $publication = $this->_processCitations($publication);
         $this->_setCoverImage($publication);

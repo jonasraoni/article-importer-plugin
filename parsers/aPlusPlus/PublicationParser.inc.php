@@ -110,7 +110,7 @@ trait PublicationParser
         $publication->setData('copyrightHolder', $this->selectText('Journal/Volume/Issue/Article/ArticleInfo/ArticleCopyright/CopyrightHolderName'), $this->getLocale());
         $publication->setData('copyrightNotice', null);
         $publication->setData('copyrightYear', $this->selectText('Journal/Volume/Issue/Article/ArticleInfo/ArticleCopyright/CopyrightYear') ?: $publicationDate->format('Y'));
-        $publication->setData('licenseURL', null);
+        $publication->setData('licenseUrl', null);
 
         // Inserts the publication and updates the submission's publication ID
         $publication = \Services::get('publication')->add($publication, \Application::get()->getRequest());
