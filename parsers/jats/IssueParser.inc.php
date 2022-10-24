@@ -45,15 +45,17 @@ trait IssueParser
         }
 
         $entry = $this->getArticleEntry();
-        if ($issue = $cache[$this->getContextId()][$entry->getVolume()][$entry->getIssue()] ?? null) {
+        $volume = $this->selectText('front/article-meta/volume') ?: $entry->getVolume();
+        $issueNumber = $this->selectText('front/article-meta/issue') ?: $entry->getIssue();
+        if ($issue = $cache[$this->getContextId()][$volume][$issueNumber] ?? null) {
             return $this->_issue = $issue;
         }
 
         // If this issue exists, return it
         $issues = \Services::get('issue')->getMany([
             'contextId' => $this->getContextId(),
-            'volumes' => $entry->getVolume(),
-            'numbers' => $entry->getIssue()
+            'volumes' => $volume,
+            'numbers' => $issueNumber
         ]);
         $this->_issue = $issues->current();
 
@@ -62,11 +64,12 @@ trait IssueParser
             $issueDao = \DAORegistry::getDAO('IssueDAO');
             $issue = $issueDao->newDataObject();
 
-            $publicationDate = $this->getPublicationDate();
+			$node = $this->selectFirst("front/article-meta/pub-date[@pub-type='collection']");
+            $publicationDate = $this->getDateFromNode($node) ?? $this->getPublicationDate();
 
             $issue->setData('journalId', $this->getContextId());
-            $issue->setData('volume', $entry->getVolume());
-            $issue->setData('number', $entry->getIssue());
+            $issue->setData('volume', $volume);
+            $issue->setData('number', $issueNumber);
             $issue->setData('year', (int) $publicationDate->format('Y'));
             $issue->setData('published', true);
             $issue->setData('current', false);
@@ -87,7 +90,7 @@ trait IssueParser
             $this->_issue = $issue;
         }
 
-        return $cache[$this->getContextId()][$entry->getVolume()][$entry->getIssue()] = $this->_issue;
+        return $cache[$this->getContextId()][$volume][$issueNumber] = $this->_issue;
     }
 
     /**
