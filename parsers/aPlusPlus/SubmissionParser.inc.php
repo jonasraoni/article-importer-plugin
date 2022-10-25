@@ -14,6 +14,7 @@
 
 namespace PKP\Plugins\ImportExport\ArticleImporter\Parsers\APlusPlus;
 
+use DateInterval;
 use PKP\Plugins\ImportExport\ArticleImporter\ArticleImporterPlugin;
 
 trait SubmissionParser
@@ -46,7 +47,7 @@ trait SubmissionParser
         $article->setData('submissionProgress', 0);
         $article->setData('stageId', \WORKFLOW_STAGE_ID_PRODUCTION);
         $article->setData('sectionId', $this->getSection()->getId());
-        $date = $this->getDateFromNode($this->selectFirst('Journal/Volume/Issue/Article/ArticleInfo/ArticleHistory/RegistrationDate')) ?: $this->getPublicationDate();
+        $date = $this->getDateFromNode($this->selectFirst('Journal/Volume/Issue/Article/ArticleInfo/ArticleHistory/RegistrationDate')) ?: $this->getPublicationDate()->add(new DateInterval('P1D'));
         $article->setData('dateSubmitted', $date->format(ArticleImporterPlugin::DATETIME_FORMAT));
 
         // Creates the submission

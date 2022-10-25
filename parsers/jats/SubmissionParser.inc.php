@@ -14,6 +14,7 @@
 
 namespace PKP\Plugins\ImportExport\ArticleImporter\Parsers\Jats;
 
+use DateInterval;
 use PKP\Plugins\ImportExport\ArticleImporter\ArticleImporterPlugin;
 
 trait SubmissionParser
@@ -48,7 +49,7 @@ trait SubmissionParser
         $article->setData('sectionId', $this->getSection()->getId());
         $article->setData('locale', $this->getLocale($this->selectText('front/article-meta/title-group/trans-title-group/@xml:lang')));
 
-        $date = $this->getDateFromNode($this->selectFirst("front/article-meta/history/date[@date-type='received']")) ?: $this->getPublicationDate();
+        $date = $this->getDateFromNode($this->selectFirst("front/article-meta/history/date[@date-type='received']")) ?: $this->getPublicationDate()->add(new DateInterval('P1D'));
         $article->setData('dateSubmitted', $date->format(ArticleImporterPlugin::DATETIME_FORMAT));
 
         // Creates the submission
