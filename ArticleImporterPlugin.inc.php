@@ -81,6 +81,23 @@ class ArticleImporterPlugin extends \ImportExportPlugin
             $user = $configuration->getUser();
             \Registry::set('user', $user);
 
+            /** @var JournalDAO  */
+            $journalDao = \DAORegistry::getDAO('JournalDAO');
+            $journal = $journalDao->getByPath($contextPath);
+            // Set global context
+            $request = \Application::get()->getRequest();
+            if (!$request->getContext()) {
+                \HookRegistry::register('Router::getRequestedContextPaths', function (string $hook, array $args) use ($journal): bool {
+                    $args[0] = [$journal->getPath()];
+                    return false;
+                });
+                $router = new \PageRouter();
+                $router->setApplication(\Application::get());
+                $request->setRouter($router);
+            }
+
+            \PluginRegistry::loadCategory('pubIds', true, $configuration->getContext()->getId());
+
             $sectionDao = \Application::getSectionDAO();
             $lastIssueId = null;
 
@@ -164,7 +181,7 @@ class ArticleImporterPlugin extends \ImportExportPlugin
     /**
      * @copydoc Plugin::register()
      */
-    public function register(string $category, string $path, ?int $mainContextId = null): bool
+    public function register($category, $path, $mainContextId = null): bool
     {
         $success = parent::register($category, $path);
         $this->addLocaleData();
