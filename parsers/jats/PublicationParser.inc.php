@@ -42,8 +42,8 @@ trait PublicationParser
         // Set article pages
         $firstPage = $this->selectText('front/article-meta/fpage');
         $lastPage = $this->selectText('front/article-meta/lpage');
-        if ($firstPage && $lastPage) {
-            $publication->setData('pages', "${firstPage}-${lastPage}");
+        if ($firstPage || $lastPage) {
+            $publication->setData('pages', "${firstPage}" . ($lastPage ? "-${lastPage}" : ''));
         }
 
         $hasTitle = false;
