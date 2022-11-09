@@ -51,14 +51,17 @@ trait AuthorParser
             $firstName = $this->getConfiguration()->getContext()->getName($this->getLocale());
         }
         $email = null;
-        $affiliation = null;
+        $affiliations = [];
 
         // Try to retrieve the affiliation and email
         foreach ($this->select('xref', $authorNode) as $node) {
             $id = $node->getAttribute('rid');
             switch ($node->getAttribute('ref-type')) {
                 case 'aff':
-                    $affiliation = $this->selectText("front/article-meta/aff[@id='${id}']//institution");
+                    $affiliation = $this->selectText("../aff[@id='${id}']//institution", $authorNode) ?: $this->selectText("front/article-meta/aff[@id='${id}']//institution");
+                    if ($affiliation) {
+                        $affiliations[] = $affiliation;
+                    }
                     break;
                 case 'corresp':
                     $email = $this->selectText("front/article-meta/author-notes/corresp[@id='${id}']//email");
@@ -76,7 +79,7 @@ trait AuthorParser
         }
         //$author->setData('preferredPublicName', "", $this->getLocale());
         $author->setData('email', $email);
-        $author->setData('affiliation', $affiliation, $this->getLocale());
+        $author->setData('affiliation', implode('; ', $affiliations), $this->getLocale());
         $author->setData('seq', $this->_authorCount + 1);
         $author->setData('publicationId', $publication->getId());
         $author->setData('includeInBrowse', true);
