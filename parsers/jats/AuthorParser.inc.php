@@ -69,7 +69,7 @@ trait AuthorParser
             }
         }
 
-        $email = $email ?: $this->selectText('email', $node) ?: $this->getConfiguration()->getEmail();
+        $email = $email ?: $this->selectText('email', $authorNode) ?: $this->getConfiguration()->getEmail();
 
         $authorDao = \DAORegistry::getDAO('AuthorDAO');
         $author = $authorDao->newDataObject();
