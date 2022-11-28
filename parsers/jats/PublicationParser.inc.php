@@ -116,6 +116,7 @@ trait PublicationParser
         // Inserts the publication and updates the submission
         $publication = \Services::get('publication')->add($publication, \Application::get()->getRequest());
 
+        $this->_processKeywords($publication);
         $this->_processAuthors($publication);
 
         // Handle PDF galley
@@ -341,5 +342,23 @@ trait PublicationParser
             throw new \Exception(__('plugins.importexport.articleImporter.missingPublicationDate'));
         }
         return $date;
+    }
+
+    /**
+     * Process the article keywords
+     */
+    private function _processKeywords(\Publication $publication): void
+    {
+        $submissionKeywordDAO = \DAORegistry::getDAO('SubmissionKeywordDAO');
+        $keywords = [];
+        foreach ($this->select('front/article-meta/kwd-group') as $node) {
+            $locale = $this->getLocale($node->getAttribute('xml:lang'));
+            foreach ($this->select('kwd', $node) as $node) {
+                $keywords[$locale][] = $this->selectText('.', $node);
+            }
+        }
+        if (count($keywords)) {
+            $submissionKeywordDAO->insertKeywords($keywords, $publication->getId());
+        }
     }
 }

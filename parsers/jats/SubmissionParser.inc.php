@@ -55,7 +55,6 @@ trait SubmissionParser
         // Creates the submission
         $this->_submission = \Services::get('submission')->add($article, \Application::get()->getRequest());
 
-        $this->_processKeywords();
         $this->_assignEditor();
 
         return $this->_submission;
@@ -68,23 +67,5 @@ trait SubmissionParser
     {
         $stageAssignmentDao = \DAORegistry::getDAO('StageAssignmentDAO');
         $stageAssignmentDao->build($this->getSubmission()->getId(), $this->getConfiguration()->getEditorGroupId(), $this->getConfiguration()->getEditor()->getId());
-    }
-
-    /**
-     * Process the article keywords
-     */
-    private function _processKeywords(): void
-    {
-        $submissionKeywordDAO = \DAORegistry::getDAO('SubmissionKeywordDAO');
-        $keywords = [];
-        foreach ($this->select('front/article-meta/kwd-group') as $node) {
-            $locale = $this->getLocale($node->getAttribute('xml:lang'));
-            foreach ($this->select('kwd', $node) as $node) {
-                $keywords[$locale][] = $this->selectText('.', $node);
-            }
-        }
-        if (count($keywords)) {
-            $submissionKeywordDAO->insertKeywords($keywords, $this->getSubmission()->getId());
-        }
     }
 }
