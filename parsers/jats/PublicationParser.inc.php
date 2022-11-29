@@ -17,6 +17,8 @@ namespace PKP\Plugins\ImportExport\ArticleImporter\Parsers\Jats;
 use APP\Services\SubmissionFileService;
 use PKP\Plugins\ImportExport\ArticleImporter\ArticleImporterPlugin;
 use PKP\Services\PKPFileService;
+use Publication;
+use TemporaryFile;
 
 trait PublicationParser
 {
@@ -112,6 +114,7 @@ trait PublicationParser
         $publication->setData('licenseURL', null);
 
         $publication = $this->_processCitations($publication);
+        $this->_setCoverImage($publication);
 
         // Inserts the publication and updates the submission
         $publication = \Services::get('publication')->add($publication, \Application::get()->getRequest());
@@ -200,7 +203,6 @@ trait PublicationParser
             }
         }
     }
-
 
     /**
      * Creates a dependent file
@@ -342,6 +344,48 @@ trait PublicationParser
             throw new \Exception(__('plugins.importexport.articleImporter.missingPublicationDate'));
         }
         return $date;
+    }
+
+    private function _setCoverImage(\Publication $publication): void
+    {
+        import('lib.pkp.classes.file.TemporaryFileManager');
+        $pfm = new \TemporaryFileManager();
+        $filename = $this->getArticleEntry()->getSubmissionCoverFile();
+        if (!$filename) {
+            return;
+        }
+        // Get the file extension, then rename the file.
+        $fileExtension = $pfm->parseFileExtension($filename->getBasename());
+
+        if (!$pfm->fileExists($pfm->getBasePath(), 'dir')) {
+            // Try to create destination directory
+            $pfm->mkdirtree($pfm->getBasePath());
+        }
+
+        $newFileName = basename(tempnam($pfm->getBasePath(), $fileExtension));
+        if (!$newFileName) return;
+
+        $pfm->copyFile($filename, $pfm->getBasePath() . "/{$newFileName}");
+        /** @var TemporaryFileDAO */
+        $temporaryFileDao = \DAORegistry::getDAO('TemporaryFileDAO');
+        /** @var TemporaryFile */
+        $temporaryFile = $temporaryFileDao->newDataObject();
+
+        $temporaryFile->setUserId(\Application::get()->getRequest()->getUser()->getId());
+        $temporaryFile->setServerFileName($newFileName);
+        $temporaryFile->setFileType(\PKPString::mime_content_type($pfm->getBasePath() . "/$newFileName", $fileExtension));
+        $temporaryFile->setFileSize($filename->getSize());
+        $temporaryFile->setOriginalFileName($pfm->truncateFileName($filename->getBasename(), 127));
+        $temporaryFile->setDateUploaded(\Core::getCurrentDate());
+
+        $temporaryFileDao->insertObject($temporaryFile);
+
+        $publication->setData('coverImage', [
+            'dateUploaded' => (new \DateTime())->format('Y-m-d H:i:s'),
+            'uploadName' => $temporaryFile->getOriginalFileName(),
+            'temporaryFileId' => $temporaryFile->getId(),
+            'altText' => 'Publication image'
+        ], $this->getLocale());
     }
 
     /**
