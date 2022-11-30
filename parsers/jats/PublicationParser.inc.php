@@ -199,7 +199,7 @@ trait PublicationParser
             if (file_exists($dependentFilePath)) {
                 $fileType = pathinfo($assetFilename, PATHINFO_EXTENSION);
                 $genreId = $this->_getGenreId($this->getContextId(), $fileType);
-                $this->_createDependentFile($genreId, $submission, $submissionFile, $userId, $fileType, $assetFilename, \SUBMISSION_FILE_DEPENDENT, \ASSOC_TYPE_SUBMISSION_FILE, false, $submissionFile->getData('fileId'), false, $dependentFilePath);
+                $this->_createDependentFile($genreId, $submission, $submissionFile, $userId, $fileType, $assetFilename, \SUBMISSION_FILE_DEPENDENT, \ASSOC_TYPE_SUBMISSION_FILE, false, $submissionFile->getId(), false, $dependentFilePath);
             }
         }
     }
