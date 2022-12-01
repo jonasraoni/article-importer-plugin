@@ -86,6 +86,7 @@ trait PublicationParser
             $value = trim($this->getTextContent($node, function ($node, $content) {
                 // Transforms the known tags, the remaining ones will be stripped
                 $tag = [
+                    'title' => 'strong',
                     'italic' => 'em',
                     'sub' => 'sub',
                     'sup' => 'sup',
@@ -212,7 +213,7 @@ trait PublicationParser
      * @param $submissionFile \SubmissionFile
      * @param $userId int
      * @param $fileType string
-     * @param $fileName string
+     * @param $filename string
      * @param bool $fileStage
      * @param bool $assocType
      * @param bool $sourceRevision
@@ -220,7 +221,7 @@ trait PublicationParser
      * @param bool $sourceFileId
      * @param $filePath string
      */
-    protected function _createDependentFile($genreId, $submission, $submissionFile, $userId, $fileType, $fileName, $fileStage = false, $assocType = false, $sourceRevision = false, $assocId = false, $sourceFileId = false, $filePath)
+    protected function _createDependentFile($genreId, $submission, $submissionFile, $userId, $fileType, $filename, $fileStage = false, $assocType = false, $sourceRevision = false, $assocId = false, $sourceFileId = false, $filePath)
     {
         /** @var SubmissionFileService $submissionFileService */
         $submissionFileService = \Services::get('submissionFile');
@@ -251,7 +252,7 @@ trait PublicationParser
         if (isset($assocId)) {
             $newSubmissionFile->setData('assocId', $assocId);
         }
-        $newSubmissionFile->setData('name', $fileName, $this->getLocale());
+        $newSubmissionFile->setData('name', $filename, $this->getLocale());
         // Expect properties to be stored as empty for artwork metadata
         $newSubmissionFile->setData('caption', '');
         $newSubmissionFile->setData('credit', '');
@@ -336,7 +337,7 @@ trait PublicationParser
         $node = null;
         // Find the most suitable pub-date node
         foreach ($this->select('front/article-meta/pub-date') as $node) {
-            if ($node->getAttribute('pub-type') == 'given-online-pub' || $node->getAttribute('publication-format') == 'electronic') {
+            if (in_array($node->getAttribute('pub-type'), ['given-online-pub', 'epub']) || $node->getAttribute('publication-format') == 'electronic') {
                 break;
             }
         }
