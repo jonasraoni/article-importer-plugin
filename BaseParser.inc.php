@@ -133,6 +133,7 @@ abstract class BaseParser
         }
 
         $this->_xpath = new \DOMXPath($this->_document);
+        $this->_xpath->registerNamespace('xlink', 'http://www.w3.org/1999/xlink');
         return $this;
     }
 
