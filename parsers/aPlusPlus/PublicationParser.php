@@ -1,36 +1,43 @@
 <?php
 /**
- * @file plugins/importexport/articleImporter/parsers/aPlusPlus/PublicationParser.inc.php
+ * @file parsers/aPlusPlus/PublicationParser.php
  *
- * Copyright (c) 2014-2022 Simon Fraser University
- * Copyright (c) 2000-2022 John Willinsky
+ * Copyright (c) 2014-2025 Simon Fraser University
+ * Copyright (c) 2000-2025 John Willinsky
  * Distributed under the GNU GPL v3. For full terms see the file docs/COPYING.
  *
  * @class PublicationParser
- * @ingroup plugins_importexport_articleImporter
- *
  * @brief Handles parsing and importing the publications
  */
 
-namespace PKP\Plugins\ImportExport\ArticleImporter\Parsers\APlusPlus;
+namespace APP\plugins\importexport\articleImporter\parsers\aPlusPlus;
 
-use APP\Services\SubmissionFileService;
-use PKP\Plugins\ImportExport\ArticleImporter\ArticleImporterPlugin;
+use APP\plugins\importexport\articleImporter\ArticleImporterPlugin;
+
+use APP\services\SubmissionFileService;
 use PKP\Services\PKPFileService;
+use APP\publication\Publication;
+use PKP\db\DAORegistry;
+use APP\submission\Submission;
+use PKP\plugins\PluginRegistry;
+use APP\core\Application;
+use PKP\i18n\LocaleConversion;
+use APP\core\Services;
+use APP\facades\Repo;
 
 trait PublicationParser
 {
     /**
      * Parse, import and retrieve the publication
      */
-    public function getPublication(): \Publication
+    public function getPublication(): Publication
     {
         $publicationDate = $this->getPublicationDate() ?: $this->getIssue()->getDatePublished();
 
         // Create the publication
-        $publication = \DAORegistry::getDAO('PublicationDAO')->newDataObject();
+        $publication = Repo::publication()->dao->newDataObject();
         $publication->setData('submissionId', $this->getSubmission()->getId());
-        $publication->setData('status', \STATUS_PUBLISHED);
+        $publication->setData('status', Submission::STATUS_PUBLISHED);
         $publication->setData('version', 1);
         $publication->setData('seq', $this->getSubmission()->getId());
         $publication->setData('accessStatus', $this->_getAccessStatus());
@@ -66,7 +73,7 @@ trait PublicationParser
         }
 
         $publication->setData('locale', $publicationLocale);
-        $publication->setData('language', \PKPLocale::getIso1FromLocale($publicationLocale));
+        $publication->setData('language', LocaleConversion::getIso1FromLocale($publicationLocale));
 
         // Set subtitle
         foreach ($this->select('Journal/Volume/Issue/Article/ArticleInfo/ArticleSubTitle') as $node) {
@@ -101,7 +108,7 @@ trait PublicationParser
         $pubIdPlugins = false;
         foreach ($this->getPublicIds() as $type => $value) {
             if ($type !== 'publisher-id' && !$pubIdPlugins) {
-                $pubIdPlugins = \PluginRegistry::loadCategory('pubIds', true, $this->getContextId());
+                $pubIdPlugins = PluginRegistry::loadCategory('pubIds', true, $this->getContextId());
             }
             $publication->setData('pub-id::' . $type, $value);
         }
@@ -113,7 +120,10 @@ trait PublicationParser
         $publication->setData('licenseUrl', null);
 
         // Inserts the publication and updates the submission's publication ID
-        $publication = \Services::get('publication')->add($publication, \Application::get()->getRequest());
+	Repo::publication()->dao->insert($publication);
+	$submission = $this->getSubmission();
+	$submission->setData('currentPublicationId', $publication->getId());
+	Repo::submission()->edit($submission, []);
 
         $this->_processKeywords($publication);
         $this->_processAuthors($publication);
@@ -122,7 +132,7 @@ trait PublicationParser
         $this->_insertPDFGalley($publication);
 
         // Publishes the article
-        \Services::get('publication')->publish($publication);
+        Services::get('publication')->publish($publication);
 
         return $publication;
     }
@@ -134,33 +144,32 @@ trait PublicationParser
     {
         // Checks if there's an ArticleGrant different of OpenAccess
         return $this->evaluate("count(Journal/Volume/Issue/Article/ArticleInfo/ArticleGrants/*[@Grant!='OpenAccess'])") > 0
-            ? \ARTICLE_ACCESS_ISSUE_DEFAULT
-            : \ARTICLE_ACCESS_OPEN;
+            ? Submission::ARTICLE_ACCESS_ISSUE_DEFAULT
+            : Submission::ARTICLE_ACCESS_OPEN;
     }
 
     /**
      * Inserts the PDF galley
      */
-    private function _insertPDFGalley(\Publication $publication): void
+    private function _insertPDFGalley(Publication $publication): void
     {
         $file = $this->getArticleEntry()->getSubmissionFile();
         $filename = $file->getFilename();
 
-        // Create a representation of the article (i.e. a galley)
-        $representationDao = \Application::getRepresentationDAO();
-        $representation = $representationDao->newDataObject();
-        $representation->setData('publicationId', $publication->getId());
-        $representation->setData('name', $filename, $this->getLocale());
-        $representation->setData('seq', 1);
-        $representation->setData('label', 'PDF');
-        $representation->setData('locale', $this->getLocale());
-        $newRepresentationId = $representationDao->insertObject($representation);
+        // Create a galley for the article
+        $galley = Repo::galley()->dao->newDataObject();
+        $galley->setData('publicationId', $publication->getId());
+        $galley->setData('name', $filename, $this->getLocale());
+        $galley->setData('seq', 1);
+        $galley->setData('label', 'PDF');
+        $galley->setData('locale', $this->getLocale());
+        $newGalleyId = Repo::galley()->add($galley);
 
-        // Add the PDF file and link representation with submission file
+        // Add the PDF file and link galley with submission file
         /** @var SubmissionFileService $submissionFileService */
-        $submissionFileService = \Services::get('submissionFile');
+        $submissionFileService = Services::get('submissionFile');
         /** @var PKPFileService $fileService */
-        $fileService = \Services::get('file');
+        $fileService = Services::get('file');
         $submission = $this->getSubmission();
 
         $submissionDir = $submissionFileService->getSubmissionDir($submission->getData('contextId'), $submission->getId());
@@ -169,9 +178,7 @@ trait PublicationParser
             $submissionDir . '/' . uniqid() . '.pdf'
         );
 
-        /* @var $submissionFileDao \SubmissionFileDAO */
-        $submissionFileDao = \DAORegistry::getDAO('SubmissionFileDAO');
-        $newSubmissionFile = $submissionFileDao->newDataObject();
+        $newSubmissionFile = Repo::submissionFile()->dao->newDataObject();
         $newSubmissionFile->setData('submissionId', $submission->getId());
         $newSubmissionFile->setData('fileId', $newFileId);
         $newSubmissionFile->setData('genreId', $this->getConfiguration()->getSubmissionGenre()->getId());
@@ -180,13 +187,13 @@ trait PublicationParser
         $newSubmissionFile->setData('createdAt', \Core::getCurrentDate());
         $newSubmissionFile->setData('updatedAt', \Core::getCurrentDate());
         $newSubmissionFile->setData('assocType', \ASSOC_TYPE_REPRESENTATION);
-        $newSubmissionFile->setData('assocId', $newRepresentationId);
+        $newSubmissionFile->setData('assocId', $newGalleyId);
         $newSubmissionFile->setData('name', $filename, $this->getLocale());
-        $submissionFile = $submissionFileService->add($newSubmissionFile, \Application::get()->getRequest());
+        $submissionFileService->add($newSubmissionFile, \Application::get()->getRequest());
 
-        $representation = $representationDao->getById($newRepresentationId);
-        $representation->setFileId($submissionFile->getData('fileId'));
-        $representationDao->updateObject($representation);
+        $galley = Repo::galley()->get($newGalleyId);
+        $galley->setData('submissionFileId', $newSubmissionFile->getData('fileId'));
+        Repo::galley()->edit($galley, []);
 
         unset($newFileId);
     }
@@ -226,7 +233,7 @@ trait PublicationParser
      */
     private function _processKeywords(\Publication $publication): void
     {
-        $submissionKeywordDAO = \DAORegistry::getDAO('SubmissionKeywordDAO');
+        $submissionKeywordDAO = DAORegistry::getDAO('SubmissionKeywordDAO');
         $keywords = [];
         foreach ($this->select('Journal/Volume/Issue/Article/ArticleHeader/KeywordGroup') as $node) {
             $locale = $this->getLocale($node->getAttribute('Language'));

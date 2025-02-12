@@ -1,41 +1,51 @@
 <?php
 /**
- * @file plugins/importexport/articleImporter/parsers/jats/PublicationParser.inc.php
+ * @file parsers/jats/PublicationParser.php
  *
- * Copyright (c) 2014-2022 Simon Fraser University
- * Copyright (c) 2000-2022 John Willinsky
+ * Copyright (c) 2014-2025 Simon Fraser University
+ * Copyright (c) 2000-2025 John Willinsky
  * Distributed under the GNU GPL v3. For full terms see the file docs/COPYING.
  *
  * @class PublicationParser
- * @ingroup plugins_importexport_articleImporter
- *
  * @brief Handles parsing and importing the publications
  */
 
-namespace PKP\Plugins\ImportExport\ArticleImporter\Parsers\Jats;
+namespace APP\plugins\importexport\articleImporter\parsers\jats;
+
+use APP\plugins\importexport\articleImporter\ArticleImporterPlugin;
 
 use APP\Services\SubmissionFileService;
 use FilesystemIterator;
-use PKP\Plugins\ImportExport\ArticleImporter\ArticleImporterPlugin;
 use PKP\Services\PKPFileService;
-use Publication;
-use TemporaryFile;
+use APP\publication\Publication;
+use PKP\file\TemporaryFile;
+use PKP\db\DAORegistry;
+use APP\core\Services;
+use PKP\core\Core;
+use APP\core\Application;
+use PKP\i18n\LocaleConversion;
+use PKP\submission\Genre;
+use PKP\plugins\PluginRegistry;
+use PKP\submissionFile\SubmissionFile;
+use PKP\file\TemporaryFileManager;
+use PKP\core\PKPString;
+use APP\facades\Repo;
 
 trait PublicationParser
 {
     /**
      * Parse, import and retrieve the publication
      */
-    public function getPublication(): \Publication
+    public function getPublication(): Publication
     {
         $publicationDate = $this->getPublicationDate() ?: $this->getIssuePublicationDate();
 
         // Create the publication
-        $publication = \DAORegistry::getDAO('PublicationDAO')->newDataObject();
-        $publication->setData('submissionId', $this->getSubmission()->getId());
+        $publication = Repo::publication()->dao->newDataObject();
+	$publication->setData('submissionId', $this->getSubmission()->getId());
         $publication->setData('status', \STATUS_PUBLISHED);
         $publication->setData('version', 1);
-        $publication->setData('seq', $this->getSubmission()->getId());
+	$publication->setData('seq', $this->getSubmission()->getId());
         $publication->setData('accessStatus', \ARTICLE_ACCESS_OPEN);
         $publication->setData('datePublished', $publicationDate->format(ArticleImporterPlugin::DATETIME_FORMAT));
         $publication->setData('sectionId', $this->getSection()->getId());
@@ -80,7 +90,7 @@ trait PublicationParser
             throw new \Exception(__('plugins.importexport.articleImporter.articleTitleMissing'));
         }
 
-        $publication->setData('language', \PKPLocale::getIso1FromLocale($this->getSubmission()->getData('locale')));
+        $publication->setData('language', LocaleConversion::getIso1FromLocale($this->getSubmission()->getData('locale')));
 
         // Set abstract
         foreach ($this->select('front/article-meta/abstract|front/article-meta/trans-abstract') as $node) {
@@ -104,7 +114,7 @@ trait PublicationParser
         $pubIdPlugins = false;
         foreach ($this->getPublicIds() as $type => $value) {
             if ($type !== 'publisher-id' && !$pubIdPlugins) {
-                $pubIdPlugins = \PluginRegistry::loadCategory('pubIds', true, $this->getContextId());
+                $pubIdPlugins = PluginRegistry::loadCategory('pubIds', true, $this->getContextId());
             }
             $publication->setData('pub-id::' . $type, $value);
         }
@@ -119,7 +129,10 @@ trait PublicationParser
         $this->_setCoverImage($publication);
 
         // Inserts the publication and updates the submission
-        $publication = \Services::get('publication')->add($publication, \Application::get()->getRequest());
+	Repo::publication()->dao->insert($publication);
+	$submission = $this->getSubmission();
+	$submission->setData('currentPublicationId', $publication->getId());
+	Repo::submission()->edit($submission, []);
 
         $this->_processKeywords($publication);
         $this->_processAuthors($publication);
@@ -132,10 +145,10 @@ trait PublicationParser
 
         $this->_insertHTMLGalley($publication);
 
-        $publication = \Services::get('publication')->get($publication->getId());
+        $publication = Repo::publication()->get($publication->getId());
 
         // Publishes the article
-        \Services::get('publication')->publish($publication);
+        Repo::publication()->publish($publication);
 
         return $publication;
     }
@@ -143,7 +156,7 @@ trait PublicationParser
     /**
      * Inserts citations
      */
-    private function _processCitations(\Publication $publication): \Publication
+    private function _processCitations(Publication $publication): Publication
     {
         $citationText = '';
         foreach ($this->select('/article/back/ref-list/ref') as $citation) {
@@ -162,41 +175,37 @@ trait PublicationParser
     /**
      * Inserts the XML as a production ready file
      */
-    private function _insertXMLSubmissionFile(\Publication $publication): void
+    private function _insertXMLSubmissionFile(Publication $publication): void
     {
         $splfile = $this->getArticleEntry()->getMetadataFile();
         $filename = $splfile->getPathname();
 
-        $genreId = \GENRE_CATEGORY_DOCUMENT;
-        $fileStage = \SUBMISSION_FILE_PRODUCTION_READY;
+        $genreId = Genre::GENRE_CATEGORY_DOCUMENT;
+        $fileStage = SubmissionFile::SUBMISSION_FILE_PRODUCTION_READY;
         $userId = $this->getConfiguration()->getUser()->getId();
 
         $submission = $this->getSubmission();
 
-        /** @var SubmissionFileService $submissionFileService */
-        $submissionFileService = \Services::get('submissionFile');
         /** @var PKPFileService $fileService */
-        $fileService = \Services::get('file');
+        $fileService = Services::get('file');
 
-        $submissionDir = $submissionFileService->getSubmissionDir($submission->getData('contextId'), $submission->getId());
+        $submissionDir = Repo::submissionFile()->getSubmissionDir($submission->getData('contextId'), $submission->getId());
         $newFileId = $fileService->add(
             $filename,
             $submissionDir . '/' . uniqid() . '.xml'
         );
 
-        /** @var \SubmissionFileDAO $submissionFileDao */
-        $submissionFileDao = \DAORegistry::getDAO('SubmissionFileDAO');
-        $newSubmissionFile = $submissionFileDao->newDataObject();
+        $newSubmissionFile = Repo::submissionFile()->dao->newDataObject();
         $newSubmissionFile->setData('submissionId', $submission->getId());
         $newSubmissionFile->setData('fileId', $newFileId);
         $newSubmissionFile->setData('genreId', $genreId);
         $newSubmissionFile->setData('fileStage', $fileStage);
         $newSubmissionFile->setData('uploaderUserId', $this->getConfiguration()->getEditor()->getId());
-        $newSubmissionFile->setData('createdAt', \Core::getCurrentDate());
-        $newSubmissionFile->setData('updatedAt', \Core::getCurrentDate());
+        $newSubmissionFile->setData('createdAt', Core::getCurrentDate());
+        $newSubmissionFile->setData('updatedAt', Core::getCurrentDate());
         $newSubmissionFile->setData('name', $splfile->getFilename(), $this->getLocale());
 
-        $submissionFile = $submissionFileService->add($newSubmissionFile, \Application::get()->getRequest());
+        $submissionFile = Repo::submissionFile()->add($newSubmissionFile, Application::get()->getRequest());
         unset($newFileId);
 
         foreach ($this->select('//asset|//graphic') as $asset) {
@@ -205,50 +214,33 @@ trait PublicationParser
             if (file_exists($dependentFilePath)) {
                 $fileType = pathinfo($assetFilename, PATHINFO_EXTENSION);
                 $genreId = $this->_getGenreId($this->getContextId(), $fileType);
-                $this->_createDependentFile($genreId, $submission, $submissionFile, $userId, $fileType, $assetFilename, \SUBMISSION_FILE_DEPENDENT, \ASSOC_TYPE_SUBMISSION_FILE, false, $submissionFile->getId(), false, $dependentFilePath);
+                $this->_createDependentFile($genreId, $submission, $submissionFile, $userId, $fileType, $assetFilename, SubmissionFile::SUBMISSION_FILE_DEPENDENT, \ASSOC_TYPE_SUBMISSION_FILE, false, $submissionFile->getId(), false, $dependentFilePath);
             }
         }
     }
 
     /**
      * Creates a dependent file
-     *
-     * @param $genreId  int
-     * @param $submission \Submission
-     * @param $submissionFile \SubmissionFile
-     * @param $userId int
-     * @param $fileType string
-     * @param $filename string
-     * @param bool $fileStage
-     * @param bool $assocType
-     * @param bool $sourceRevision
-     * @param bool $assocId
-     * @param bool $sourceFileId
-     * @param $filePath string
      */
-    protected function _createDependentFile($genreId, $submission, $submissionFile, $userId, $fileType, $filename, $fileStage = false, $assocType = false, $sourceRevision = false, $assocId = false, $sourceFileId = false, $filePath)
+    protected function _createDependentFile(int $genreId, Submission $submission, SubmissionFile $submissionFile, int $userId, string $fileType, string $filename, $fileStage = false, $assocType = false, $sourceRevision = false, $assocId = false, $sourceFileId = false, string $filePath)
     {
-        /** @var SubmissionFileService $submissionFileService */
-        $submissionFileService = \Services::get('submissionFile');
         /** @var PKPFileService $fileService */
-        $fileService = \Services::get('file');
+        $fileService = Services::get('file');
 
-        $submissionDir = $submissionFileService->getSubmissionDir($submission->getData('contextId'), $submission->getId());
+        $submissionDir = Repo::submissionFile()->getSubmissionDir($submission->getData('contextId'), $submission->getId());
         $newFileId = $fileService->add(
             $filePath,
             $submissionDir . '/' . uniqid() . '.' . $fileType
         );
 
-        /* @var $submissionFileDao \SubmissionFileDAO */
-        $submissionFileDao = \DAORegistry::getDAO('SubmissionFileDAO');
-        $newSubmissionFile = $submissionFileDao->newDataObject();
+        $newSubmissionFile = Repo::submissionFile()->dao->newDataObject();
         $newSubmissionFile->setData('submissionId', $submission->getId());
         $newSubmissionFile->setData('fileId', $newFileId);
         $newSubmissionFile->setData('fileStage', $fileStage);
         $newSubmissionFile->setData('genreId', $genreId);
         $newSubmissionFile->setData('fileStage', $fileStage);
-        $newSubmissionFile->setData('createdAt', \Core::getCurrentDate());
-        $newSubmissionFile->setData('updatedAt', \Core::getCurrentDate());
+        $newSubmissionFile->setData('createdAt', Core::getCurrentDate());
+        $newSubmissionFile->setData('updatedAt', Core::getCurrentDate());
         $newSubmissionFile->setData('uploaderUserId', $userId);
 
         if (isset($assocType)) {
@@ -264,58 +256,53 @@ trait PublicationParser
         $newSubmissionFile->setData('copyrightOwner', '');
         $newSubmissionFile->setData('terms', '');
 
-        $insertedMediaFile = $submissionFileService->add($newSubmissionFile, \Application::get()->getRequest());
+        $insertedMediaFile = Repo::submissionFile()->add($newSubmissionFile, Application::get()->getRequest());
     }
 
     /**
      * Inserts the PDF galley
      */
-    private function _insertPDFGalley(\Publication $publication): void
+    private function _insertPDFGalley(Publication $publication): void
     {
         $file = $this->getArticleEntry()->getSubmissionFile();
         $filename = $file->getFilename();
 
-        // Create a representation of the article (i.e. a galley)
-        $representationDao = \Application::getRepresentationDAO();
-        $newRepresentation = $representationDao->newDataObject();
-        $newRepresentation->setData('publicationId', $publication->getId());
-        $newRepresentation->setData('name', $filename, $this->getLocale());
-        $newRepresentation->setData('seq', 1);
-        $newRepresentation->setData('label', 'Fulltext PDF');
-        $newRepresentation->setData('locale', $this->getLocale());
-        $newRepresentationId = $representationDao->insertObject($newRepresentation);
+        // Create a galley for the article
+        $newGalley = Repo::galley()->dao->newDataObject();
+        $newGalley->setData('publicationId', $publication->getId());
+        $newGalley->setData('name', $filename, $this->getLocale());
+        $newGalley->setData('seq', 1);
+        $newGalley->setData('label', 'Fulltext PDF');
+        $newGalley->setData('locale', $this->getLocale());
+        $newGalleyId = Repo::galley()->add($newGalley);
 
-        // Add the PDF file and link representation with submission file
-        /** @var SubmissionFileService $submissionFileService */
-        $submissionFileService = \Services::get('submissionFile');
+        // Add the PDF file and link galley with submission file
         /** @var PKPFileService $fileService */
-        $fileService = \Services::get('file');
+        $fileService = Services::get('file');
         $submission = $this->getSubmission();
 
-        $submissionDir = $submissionFileService->getSubmissionDir($submission->getData('contextId'), $submission->getId());
+        $submissionDir = Repo::submissionFile()->getSubmissionDir($submission->getData('contextId'), $submission->getId());
         $newFileId = $fileService->add(
             $file->getPathname(),
             $submissionDir . '/' . uniqid() . '.pdf'
         );
 
-        /* @var $submissionFileDao \SubmissionFileDAO */
-        $submissionFileDao = \DAORegistry::getDAO('SubmissionFileDAO');
-        $newSubmissionFile = $submissionFileDao->newDataObject();
+        $newSubmissionFile = Repo::submissionFile()->dao->newDataObject();
         $newSubmissionFile->setData('submissionId', $submission->getId());
         $newSubmissionFile->setData('fileId', $newFileId);
         $newSubmissionFile->setData('genreId', $this->getConfiguration()->getSubmissionGenre()->getId());
-        $newSubmissionFile->setData('fileStage', \SUBMISSION_FILE_PROOF);
+        $newSubmissionFile->setData('fileStage', SubmissionFile::SUBMISSION_FILE_PROOF);
         $newSubmissionFile->setData('uploaderUserId', $this->getConfiguration()->getEditor()->getId());
-        $newSubmissionFile->setData('createdAt', \Core::getCurrentDate());
-        $newSubmissionFile->setData('updatedAt', \Core::getCurrentDate());
+        $newSubmissionFile->setData('createdAt', Core::getCurrentDate());
+        $newSubmissionFile->setData('updatedAt', Core::getCurrentDate());
         $newSubmissionFile->setData('assocType', \ASSOC_TYPE_REPRESENTATION);
-        $newSubmissionFile->setData('assocId', $newRepresentationId);
+        $newSubmissionFile->setData('assocId', $newGalleyId);
         $newSubmissionFile->setData('name', $filename, $this->getLocale());
-        $submissionFile = $submissionFileService->add($newSubmissionFile, \Application::get()->getRequest());
+        Repo::submissionFile()->add($newSubmissionFile, Application::get()->getRequest());
 
-        $representation = $representationDao->getById($newRepresentationId);
-        $representation->setFileId($submissionFile->getData('id'));
-        $representationDao->updateObject($representation);
+        $galley = Repo::galley()->get($newGalleyId);
+        $galley->setData('submissionFileId', $newSubmissionFile->getData('id'));
+        Repo::galley()->edit($galley, []);
 
         unset($newFileId);
     }
@@ -354,8 +341,7 @@ trait PublicationParser
 
     private function _setCoverImage(\Publication $publication): void
     {
-        import('lib.pkp.classes.file.TemporaryFileManager');
-        $pfm = new \TemporaryFileManager();
+        $pfm = new TemporaryFileManager();
         $filename = $this->getArticleEntry()->getSubmissionCoverFile();
         if (!$filename) {
             return;
@@ -373,16 +359,16 @@ trait PublicationParser
 
         $pfm->copyFile($filename, $pfm->getBasePath() . "/{$newFileName}");
         /** @var TemporaryFileDAO */
-        $temporaryFileDao = \DAORegistry::getDAO('TemporaryFileDAO');
+        $temporaryFileDao = DAORegistry::getDAO('TemporaryFileDAO');
         /** @var TemporaryFile */
         $temporaryFile = $temporaryFileDao->newDataObject();
 
-        $temporaryFile->setUserId(\Application::get()->getRequest()->getUser()->getId());
+        $temporaryFile->setUserId(Application::get()->getRequest()->getUser()->getId());
         $temporaryFile->setServerFileName($newFileName);
-        $temporaryFile->setFileType(\PKPString::mime_content_type($pfm->getBasePath() . "/$newFileName", $fileExtension));
+        $temporaryFile->setFileType(PKPString::mime_content_type($pfm->getBasePath() . "/$newFileName", $fileExtension));
         $temporaryFile->setFileSize($filename->getSize());
         $temporaryFile->setOriginalFileName($pfm->truncateFileName($filename->getBasename(), 127));
-        $temporaryFile->setDateUploaded(\Core::getCurrentDate());
+        $temporaryFile->setDateUploaded(Core::getCurrentDate());
 
         $temporaryFileDao->insertObject($temporaryFile);
 
@@ -397,56 +383,51 @@ trait PublicationParser
     /**
      * Inserts the HTML as a production ready file
      */
-    private function _insertHTMLGalley(\Publication $publication): void
+    private function _insertHTMLGalley(Publication $publication): void
     {
         $splfile = $this->getArticleEntry()->getHtmlFile();
 		if (!$splfile) {
 			return;
 		}
 
-        // Create a representation of the article (i.e. a galley)
-        $representationDao = \Application::getRepresentationDAO();
-        $newRepresentation = $representationDao->newDataObject();
-        $newRepresentation->setData('publicationId', $publication->getId());
-        $newRepresentation->setData('name', $splfile->getBasename(), $this->getLocale());
-        $newRepresentation->setData('seq', 2);
-        $newRepresentation->setData('label', 'Fulltext HTML');
-        $newRepresentation->setData('locale', $this->getLocale());
-        $newRepresentationId = $representationDao->insertObject($newRepresentation);
+        // Create a galley of the article (i.e. a galley)
+        $newGalley = Repo::galley()->dao->newDataObject();
+        $newGalley->setData('publicationId', $publication->getId());
+        $newGalley->setData('name', $splfile->getBasename(), $this->getLocale());
+        $newGalley->setData('seq', 2);
+        $newGalley->setData('label', 'Fulltext HTML');
+        $newGalley->setData('locale', $this->getLocale());
+        $newGalleyId = Repo::galley()->add($newGalley);
 
         $userId = $this->getConfiguration()->getUser()->getId();
 
         $submission = $this->getSubmission();
 
-        /** @var SubmissionFileService $submissionFileService */
-        $submissionFileService = \Services::get('submissionFile');
         /** @var PKPFileService $fileService */
-        $fileService = \Services::get('file');
+        $fileService = Services::get('file');
 
         $filename = tempnam(sys_get_temp_dir(), 'tmp');
         file_put_contents($filename, str_replace('src="images/', 'src="', file_get_contents($splfile->getPathname())));
 
-        $submissionDir = $submissionFileService->getSubmissionDir($submission->getData('contextId'), $submission->getId());
+        $submissionDir = Repo::submissionFile()->getSubmissionDir($submission->getData('contextId'), $submission->getId());
         $newFileId = $fileService->add(
             $filename,
             $submissionDir . '/' . uniqid() . '.html'
         );
 
-        /** @var \SubmissionFileDAO $submissionFileDao */
-        $submissionFileDao = \DAORegistry::getDAO('SubmissionFileDAO');
-        $newSubmissionFile = $submissionFileDao->newDataObject();
+        $newSubmissionFile = Repo::submissionFile()->dao->newDataObject();
         $newSubmissionFile->setData('submissionId', $submission->getId());
         $newSubmissionFile->setData('fileId', $newFileId);
         $newSubmissionFile->setData('genreId', $this->getConfiguration()->getSubmissionGenre()->getId());
-        $newSubmissionFile->setData('fileStage', \SUBMISSION_FILE_PROOF);
+        $newSubmissionFile->setData('fileStage', SubmissionFile::SUBMISSION_FILE_PROOF);
         $newSubmissionFile->setData('uploaderUserId', $this->getConfiguration()->getEditor()->getId());
-        $newSubmissionFile->setData('createdAt', \Core::getCurrentDate());
-        $newSubmissionFile->setData('updatedAt', \Core::getCurrentDate());
+        $newSubmissionFile->setData('createdAt', Core::getCurrentDate());
+        $newSubmissionFile->setData('updatedAt', Core::getCurrentDate());
         $newSubmissionFile->setData('assocType', \ASSOC_TYPE_REPRESENTATION);
-        $newSubmissionFile->setData('assocId', $newRepresentationId);
+        $newSubmissionFile->setData('assocId', $newGalleyId);
         $newSubmissionFile->setData('name', $splfile->getBasename(), $this->getLocale());
 
-        $submissionFile = $submissionFileService->add($newSubmissionFile, \Application::get()->getRequest());
+        $submissionFile = Repo::submissionFile()->add($newSubmissionFile, Application::get()->getRequest());
 
         /** @var \SplFileInfo */
         foreach (is_dir($splfile->getPath()) ? new FilesystemIterator($splfile->getPath() . '/images') : [] as $assetFilename) {
@@ -455,20 +436,20 @@ trait PublicationParser
             }
             $fileType = $assetFilename->getExtension();
             $genreId = $this->_getGenreId($this->getContextId(), $fileType);
-            $this->_createDependentFile($genreId, $submission, $submissionFile, $userId, $fileType, $assetFilename->getBasename(), \SUBMISSION_FILE_DEPENDENT, \ASSOC_TYPE_SUBMISSION_FILE, false, $submissionFile->getId(), false, $assetFilename);
+            $this->_createDependentFile($genreId, $submission, $submissionFile, $userId, $fileType, $assetFilename->getBasename(), SubmissionFile::SUBMISSION_FILE_DEPENDENT, \ASSOC_TYPE_SUBMISSION_FILE, false, $submissionFile->getId(), false, $assetFilename);
         }
 
-        $representation = $representationDao->getById($newRepresentationId);
-        $representation->setFileId($submissionFile->getData('id'));
-        $representationDao->updateObject($representation);
+        $galley = Repo::galley()->get($newGalleyId);
+        $galley->setData('submissionFileId', $submissionFile->getData('id'));
+        Repo::galley()->edit($galley);
     }
 
     /**
      * Process the article keywords
      */
-    private function _processKeywords(\Publication $publication): void
+    private function _processKeywords(Publication $publication): void
     {
-        $submissionKeywordDAO = \DAORegistry::getDAO('SubmissionKeywordDAO');
+        $submissionKeywordDAO = DAORegistry::getDAO('SubmissionKeywordDAO');
         $keywords = [];
         foreach ($this->select('front/article-meta/kwd-group') as $node) {
             $locale = $this->getLocale($node->getAttribute('xml:lang'));

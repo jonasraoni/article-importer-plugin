@@ -1,32 +1,33 @@
 <?php
 /**
- * @file plugins/importexport/articleImporter/ArticleEntry.inc.php
+ * @file ArticleEntry.php
  *
- * Copyright (c) 2014-2022 Simon Fraser University
- * Copyright (c) 2000-2022 John Willinsky
+ * Copyright (c) 2014-2025 Simon Fraser University
+ * Copyright (c) 2000-2025 John Willinsky
  * Distributed under the GNU GPL v3. For full terms see the file docs/COPYING.
  *
  * @class ArticleEntry
- * @ingroup plugins_importexport_articleImporter
- *
  * @brief Glues together the volume/issue/article numbers and the article files
  */
 
-namespace PKP\Plugins\ImportExport\ArticleImporter;
+namespace APP\plugins\importexport\articleImporter;
 
-use PKP\Plugins\ImportExport\ArticleImporter\Exceptions\InvalidDocTypeException;
-use PKP\Plugins\ImportExport\ArticleImporter\Exceptions\NoSuitableParserException;
+use APP\plugins\importexport\articleImporter\exceptions\InvalidDocTypeException;
+use APP\plugins\importexport\articleImporter\exceptions\NoSuitableParserException;
 
 class ArticleEntry
 {
     /** @var \SplFileInfo[] List of files */
-    private $_files = [];
+    private array $_files = [];
+
     /** @var int The article's number */
-    private $_volume;
+    private int $_volume;
+
     /** @var int The issue's number */
-    private $_issue;
+    private int $_issue;
+
     /** @var int The issue's volume */
-    private $_article;
+    private int $_article;
 
     /**
      * Constructor

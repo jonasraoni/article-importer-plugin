@@ -1,18 +1,16 @@
 <?php
 /**
- * @file plugins/importexport/articleImporter/ArticleIterator.inc.php
+ * @file ArticleIterator.php
  *
- * Copyright (c) 2014-2022 Simon Fraser University
- * Copyright (c) 2000-2022 John Willinsky
+ * Copyright (c) 2014-2025 Simon Fraser University
+ * Copyright (c) 2000-2025 John Willinsky
  * Distributed under the GNU GPL v3. For full terms see the file docs/COPYING.
  *
  * @class ArticleIterator
- * @ingroup plugins_importexport_articleImporter
- *
  * @brief Article iterator, responsible to navigate through the volume/issue/article structure and group the article files.
  */
 
-namespace PKP\Plugins\ImportExport\ArticleImporter;
+namespace APP\plugins\importexport\articleImporter;
 
 class ArticleIterator extends \ArrayIterator
 {

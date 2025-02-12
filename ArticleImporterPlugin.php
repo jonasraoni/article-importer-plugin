@@ -1,49 +1,33 @@
 <?php
 /**
- * @file plugins/importexport/articleImporter/ArticleImporterPlugin.inc.php
+ * @file ArticleImporterPlugin.php
  *
- * Copyright (c) 2014-2022 Simon Fraser University
- * Copyright (c) 2000-2022 John Willinsky
+ * Copyright (c) 2014-2025 Simon Fraser University
+ * Copyright (c) 2000-2025 John Willinsky
  * Distributed under the GNU GPL v3. For full terms see the file docs/COPYING.
  *
  * @class ArticleImporterPlugin
- * @ingroup plugins_importexport_articleImporter
- *
  * @brief ArticleImporter XML import plugin
  */
 
-namespace PKP\Plugins\ImportExport\ArticleImporter;
+namespace APP\plugins\importexport\articleImporter;
 
-import('lib.pkp.classes.plugins.ImportExportPlugin');
-import('lib.pkp.classes.submission.SubmissionFile');
-import('lib.pkp.classes.file.FileManager');
+use APP\plugins\importexport\articleImporter\exceptions\ArticleSkippedException;
 
-use PKP\Plugins\ImportExport\ArticleImporter\Exceptions\ArticleSkippedException;
+use PKP\session\SessionManager;
+use PKP\core\Registry;
+use PKP\db\DAORegistry;
+use PKP\plugins\Hook;
+use APP\core\Application;
+use APP\core\PageRouter;
+use APP\core\Services;
+use PKP\plugins\PluginRegistry;
+use PKP\plugins\ImportExportPlugin;
+use APP\facades\Repo;
 
-class ArticleImporterPlugin extends \ImportExportPlugin
+class ArticleImporterPlugin extends ImportExportPlugin
 {
     public const DATETIME_FORMAT = 'Y-m-d H:i:s';
-    /**
-     * Registers a custom autoloader to handle the plugin namespace
-     */
-    private function useAutoLoader()
-    {
-        spl_autoload_register(function ($className) {
-            // Removes the base namespace from the class name
-            $path = explode(__NAMESPACE__ . '\\', $className, 2);
-            if (!reset($path)) {
-                // Breaks the remaining class name by \ to retrieve the folder and class name
-                $path = explode('\\', end($path));
-                $class = array_pop($path);
-                $path = array_map(function ($name) {
-                    return strtolower($name[0]) . substr($name, 1);
-                }, $path);
-                $path[] = $class;
-                // Uses the internal loader
-                $this->import(implode('.', $path));
-            }
-        });
-    }
 
     /**
      * @copydoc ImportExportPlugin::getDescription()
@@ -51,7 +35,7 @@ class ArticleImporterPlugin extends \ImportExportPlugin
     public function executeCLI($scriptName, &$args): void
     {
         ini_set('memory_limit', -1);
-        \SessionManager::getManager();
+        SessionManager::getManager();
         // Disable the time limit
         set_time_limit(0);
 
@@ -67,7 +51,7 @@ class ArticleImporterPlugin extends \ImportExportPlugin
         $count = $imported = $failed = $skipped = 0;
         try {
             $configuration = new Configuration(
-                [Parsers\APlusPlus\Parser::class, Parsers\Jats\Parser::class],
+                [parsers\aPlusPlus\Parser::class, parsers\jats\Parser::class],
                 $contextPath,
                 $username,
                 $editorUsername,
@@ -81,26 +65,25 @@ class ArticleImporterPlugin extends \ImportExportPlugin
             //     when running CLI tools. This assumes that given the username supplied should be used as the
             //  authenticated user. To revisit later.
             $user = $configuration->getUser();
-            \Registry::set('user', $user);
+            Registry::set('user', $user);
 
             /** @var JournalDAO  */
-            $journalDao = \DAORegistry::getDAO('JournalDAO');
+            $journalDao = DAORegistry::getDAO('JournalDAO');
             $journal = $journalDao->getByPath($contextPath);
             // Set global context
-            $request = \Application::get()->getRequest();
+            $request = Application::get()->getRequest();
             if (!$request->getContext()) {
-                \HookRegistry::register('Router::getRequestedContextPaths', function (string $hook, array $args) use ($journal): bool {
+                Hook::add('Router::getRequestedContextPaths', function (string $hook, array $args) use ($journal): bool {
                     $args[0] = [$journal->getPath()];
                     return false;
                 });
-                $router = new \PageRouter();
-                $router->setApplication(\Application::get());
+                $router = new PageRouter();
+                $router->setApplication(Application::get());
                 $request->setRouter($router);
             }
 
-            \PluginRegistry::loadCategory('pubIds', true, $configuration->getContext()->getId());
+            PluginRegistry::loadCategory('pubIds', true, $configuration->getContext()->getId());
 
-            $sectionDao = \Application::getSectionDAO();
             $lastIssueId = null;
 
             // Iterates through all the found article entries, already sorted by ascending volume > issue > article
@@ -140,18 +123,16 @@ class ArticleImporterPlugin extends \ImportExportPlugin
     public function resequenceIssues(Configuration $configuration): void
     {
         $contextId = $configuration->getContext()->getId();
-        $issueDao = \DAORegistry::getDAO('IssueDAO');
+
         // Clears previous ordering
-        $issueDao->deleteCustomIssueOrdering($contextId);
+        Repo::issue()->dao->deleteCustomIssueOrdering($contextId);
 
         // Retrieves issue IDs sorted by volume and number
-        $rsIssues = \Services::get('issue')->getQueryBuilder([
-            'contextId' => $contextId,
-            'isPublished' => true,
-            'orderBy' => 'seq',
-            'orderDirection' => 'ASC'
-        ])
-            ->getQuery()
+	$issueCollector = Repo::issue()->getCollector();
+        $rsIssues = $issueCollector->filterByContextIds([$contextId])
+	    ->filterByPublished(true)
+	    ->orderBy($issueCollector::ORDERBY_SEQUENCE)
+	    ->getQueryBuilder()
             ->orderBy('volume', 'DESC')
             ->orderBy('number', 'DESC')
             ->select('i.issue_id')
@@ -160,13 +141,13 @@ class ArticleImporterPlugin extends \ImportExportPlugin
         $latestIssue = null;
         foreach ($rsIssues as $id) {
             $latestIssue || ($latestIssue = $id);
-            $issueDao->insertCustomIssueOrder($contextId, $id, ++$sequence);
+            Repo::issue()->dao->insertCustomIssueOrder($contextId, $id, ++$sequence);
         }
 
         // Sets latest issue as the current one
-        $latestIssue = \Services::get('issue')->get($latestIssue);
+        $latestIssue = Repo::issue()->get($latestIssue);
         $latestIssue->setData('current', true);
-        $issueDao->updateCurrent($configuration->getContext()->getId(), $latestIssue);
+        Repo::issue()->updateCurrent($configuration->getContext()->getId(), $latestIssue);
     }
 
     /**
@@ -187,7 +168,6 @@ class ArticleImporterPlugin extends \ImportExportPlugin
     {
         $success = parent::register($category, $path);
         $this->addLocaleData();
-        $this->useAutoLoader();
         return $success;
     }
 

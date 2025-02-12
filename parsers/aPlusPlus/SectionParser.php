@@ -1,25 +1,27 @@
 <?php
 /**
- * @file plugins/importexport/articleImporter/parsers/jats/SectionParser.inc.php
+ * @file parsers/aPlusPlus/SectionParser.php
  *
- * Copyright (c) 2014-2022 Simon Fraser University
- * Copyright (c) 2000-2022 John Willinsky
+ * Copyright (c) 2014-2025 Simon Fraser University
+ * Copyright (c) 2000-2025 John Willinsky
  * Distributed under the GNU GPL v3. For full terms see the file docs/COPYING.
  *
  * @class SectionParser
- * @ingroup plugins_importexport_articleImporter
- *
  * @brief Handles parsing and importing the sections
  */
 
-namespace PKP\Plugins\ImportExport\ArticleImporter\Parsers\Jats;
+namespace APP\plugins\importexport\articleImporter\parsers\aPlusPlus;
+
+use APP\section\Section;
+use APP\core\Application;
 
 trait SectionParser
 {
     /** @var bool True if the section was created by this instance */
-    private $_isSectionOwner;
-    /** @var \Section Section instance */
-    private $_section;
+    private bool $_isSectionOwner = false;
+
+    /** @var Section Section instance */
+    private Section $_section;
 
     /**
      * Rollbacks the operation
@@ -27,14 +29,14 @@ trait SectionParser
     private function _rollbackSection(): void
     {
         if ($this->_isSectionOwner) {
-            \Application::getSectionDAO()->deleteObject($this->_section);
+            Application::getSectionDAO()->deleteObject($this->_section);
         }
     }
 
     /**
      * Parses and retrieves the section, if a section with the same name exists, it will be retrieved
      */
-    public function getSection(): \Section
+    public function getSection(): Section
     {
         static $cache = [];
 
@@ -46,19 +48,19 @@ trait SectionParser
         $locale = $this->getLocale();
 
         // Retrieves the section name and locale
-        $node = $this->selectFirst('front/article-meta/article-categories/subj-group');
+        $node = $this->selectFirst('Journal/Volume/Issue/Article/ArticleInfo/ArticleCategory');
         if ($node) {
-            $sectionName = ucwords(strtolower($this->selectText('subject', $node)));
-            $locale = $this->getLocale($node->getAttribute('xml:lang'));
+            $sectionName = ucwords(strtolower($this->selectText('.', $node)));
+            $locale = $this->getLocale($node->getAttribute('Language'));
         }
 
-        // CUSTOM: Section names have two languages, splitted by "/", where the second is "en_US"
+        // CUSTOM: Section names have two languages, splitted by "/", where the second is "en"
         $sectionName = preg_split('@\s*/\s*@', $sectionName ?: $this->getConfiguration()->getDefaultSectionName(), 2);
 
         $sectionNames = [];
         $sectionNames[$locale] = reset($sectionName);
         if (count($sectionName) > 1) {
-            $sectionNames['en_US'] = end($sectionName);
+            $sectionNames['en'] = end($sectionName);
         }
 
         // Tries to find an entry in the cache
@@ -70,9 +72,8 @@ trait SectionParser
 
         if (!$this->_section) {
             // Tries to find an entry in the database
-            $sectionDao = \Application::getSectionDAO();
             foreach ($sectionNames as $locale => $title) {
-                if ($this->_section = $sectionDao->getByTitle($title, $this->getContextId(), $locale)) {
+                if ($this->_section = Repo::section()->getCollector()->filterByTitles([$title])->filterByContextIds([$this->getContextId()])->getMany()->first()) {
                     break;
                 }
             }
@@ -80,8 +81,7 @@ trait SectionParser
 
         if (!$this->_section) {
             // Creates a new section
-            \AppLocale::requireComponents(\LOCALE_COMPONENT_APP_DEFAULT);
-            $section = $sectionDao->newDataObject();
+            $section = Repo::section()->dao->newDataObject();
             $section->setData('contextId', $this->getContextId());
 
             foreach ($sectionNames as $locale => $title) {
@@ -96,7 +96,8 @@ trait SectionParser
             $section->setData('hideTitle', false);
             $section->setData('hideAuthor', false);
 
-            $sectionDao->insertObject($section);
+            Repo::section()->add($section);
+
             $this->_section = $section;
         }
 

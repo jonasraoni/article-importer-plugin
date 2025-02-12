@@ -1,26 +1,31 @@
 <?php
 /**
- * @file plugins/importexport/articleImporter/parsers/jats/SubmissionParser.inc.php
+ * @file parsers/jats/SubmissionParser.php
  *
- * Copyright (c) 2014-2022 Simon Fraser University
- * Copyright (c) 2000-2022 John Willinsky
+ * Copyright (c) 2014-2025 Simon Fraser University
+ * Copyright (c) 2000-2025 John Willinsky
  * Distributed under the GNU GPL v3. For full terms see the file docs/COPYING.
  *
  * @class SubmissionParser
- * @ingroup plugins_importexport_articleImporter
- *
  * @brief Handles parsing and importing the submissions
  */
 
-namespace PKP\Plugins\ImportExport\ArticleImporter\Parsers\Jats;
+namespace APP\plugins\importexport\articleImporter\parsers\jats;
+
+use APP\plugins\importexport\articleImporter\ArticleImporterPlugin;
 
 use DateInterval;
-use PKP\Plugins\ImportExport\ArticleImporter\ArticleImporterPlugin;
+
+use APP\submission\Submission;
+use APP\core\Application;
+use APP\core\Services;
+use PKP\db\DAORegistry;
+use APP\facades\Repo;
 
 trait SubmissionParser
 {
-    /** @var \Submission Submission instance */
-    private $_submission;
+    /** @var Submission Submission instance */
+    private ?Submission $_submission = null;
 
     /**
      * Rollbacks the operation
@@ -28,23 +33,23 @@ trait SubmissionParser
     private function _rollbackSubmission(): void
     {
         if ($this->_submission) {
-            \Application::getSubmissionDAO()->deleteObject($this->_submission);
+            Repo::submission()->delete($this->_submission);
         }
     }
 
     /**
      * Parses and retrieves the submission
      */
-    public function getSubmission(): \Submission
+    public function getSubmission(): Submission
     {
         if ($this->_submission) {
             return $this->_submission;
         }
 
-        $article = \Application::getSubmissionDAO()->newDataObject();
+        $article = Repo::submission()->dao->newDataObject();
         $article->setData('contextId', $this->getContextId());
         $article->setData('status', \STATUS_PUBLISHED);
-        $article->setData('submissionProgress', 0);
+        $article->setData('submissionProgress', '');
         $article->setData('stageId', \WORKFLOW_STAGE_ID_PRODUCTION);
         $article->setData('sectionId', $this->getSection()->getId());
         $article->setData('locale', $this->getLocale($this->selectText('front/article-meta/title-group/trans-title-group/@xml:lang')));
@@ -53,7 +58,8 @@ trait SubmissionParser
         $article->setData('dateSubmitted', $date->format(ArticleImporterPlugin::DATETIME_FORMAT));
 
         // Creates the submission
-        $this->_submission = \Services::get('submission')->add($article, \Application::get()->getRequest());
+        Repo::submission()->dao->insert($article);
+	$this->_submission = $article;
 
         $this->_assignEditor();
 
@@ -65,7 +71,7 @@ trait SubmissionParser
      */
     private function _assignEditor(): void
     {
-        $stageAssignmentDao = \DAORegistry::getDAO('StageAssignmentDAO');
+        $stageAssignmentDao = DAORegistry::getDAO('StageAssignmentDAO');
         $stageAssignmentDao->build($this->getSubmission()->getId(), $this->getConfiguration()->getEditorGroupId(), $this->getConfiguration()->getEditor()->getId());
     }
 }

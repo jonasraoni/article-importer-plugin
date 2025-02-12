@@ -1,20 +1,18 @@
 <?php
 /**
- * @file plugins/importexport/articleImporter/Parser.inc.php
+ * @file parsers\aPlusPlus\Parser.php
  *
- * Copyright (c) 2014-2022 Simon Fraser University
- * Copyright (c) 2000-2022 John Willinsky
+ * Copyright (c) 2014-2025 Simon Fraser University
+ * Copyright (c) 2000-2025 John Willinsky
  * Distributed under the GNU GPL v3. For full terms see the file docs/COPYING.
  *
  * @class Parser
- * @ingroup plugins_importexport_articleImporter
- *
  * @brief Parser class, aggregates all the sub-parsers
  */
 
-namespace PKP\Plugins\ImportExport\ArticleImporter\Parsers\APlusPlus;
+namespace APP\plugins\importexport\articleImporter\parsers\aPlusPlus;
 
-use PKP\Plugins\ImportExport\ArticleImporter\BaseParser;
+use APP\plugins\importexport\articleImporter\BaseParser;
 
 class Parser extends BaseParser
 {

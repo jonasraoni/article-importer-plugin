@@ -1,38 +1,45 @@
 <?php
 /**
- * @file plugins/importexport/articleImporter/BaseParser.inc.php
+ * @file BaseParser.php
  *
- * Copyright (c) 2014-2022 Simon Fraser University
- * Copyright (c) 2000-2022 John Willinsky
+ * Copyright (c) 2014-2025 Simon Fraser University
+ * Copyright (c) 2000-2025 John Willinsky
  * Distributed under the GNU GPL v3. For full terms see the file docs/COPYING.
  *
  * @class BaseParser
- * @ingroup plugins_importexport_articleImporter
- *
  * @brief Base class that parsers should extend
  */
 
-namespace PKP\Plugins\ImportExport\ArticleImporter;
+namespace APP\plugins\importexport\articleImporter;
 
-use PKP\Plugins\ImportExport\ArticleImporter\Exceptions\AlreadyExistsException;
-use PKP\Plugins\ImportExport\ArticleImporter\Exceptions\InvalidDocTypeException;
+use APP\plugins\importexport\articleImporter\exceptions\AlreadyExistsException;
+use APP\plugins\importexport\articleImporter\exceptions\InvalidDocTypeException;
+use APP\publication\Publication;
+use APP\issue\Issue;
+use APP\submission\Submission;
+use APP\section\Section;
+use APP\core\Application;
+use APP\author\Author;
+use APP\file\PublicFileManager;
+use APP\facades\Repo;
+use PKP\db\DAORegistry;
 
 abstract class BaseParser
 {
     /** @var Configuration Configuration */
-    private $_configuration;
+    private Configuration $_configuration;
     /** @var ArticleEntry Article entry */
-    private $_entry;
+    private ArticleEntry $_entry;
     /** @var \DOMDocument The DOMDocument instance for the XML metadata */
-    private $_document;
+    private \DOMDocument $_document;
     /** @var \DOMXPath The DOMXPath instance for the XML metadata */
-    private $_xpath;
+    private \DOMXPath $_xpath;
     /** @var int Context ID */
-    private $_contextId;
+    private int $_contextId;
     /** @var string Default locale, grabbed from the context */
-    private $_locale;
+    private string $_locale;
     /** @var int[] cache of genres by context id and extension */
-    private $_cachedGenres;
+    private array $_cachedGenres;
 
     /**
      * Constructor
@@ -49,22 +56,22 @@ abstract class BaseParser
     /**
      * Parses the publication
      */
-    abstract public function getPublication(): \Publication;
+    abstract public function getPublication(): Publication;
 
     /**
      * Parses the issue
      */
-    abstract public function getIssue(): \Issue;
+    abstract public function getIssue(): Issue;
 
     /**
      * Parses the submission
      */
-    abstract public function getSubmission(): \Submission;
+    abstract public function getSubmission(): Submission;
 
     /**
      * Parses the section
      */
-    abstract public function getSection(): \Section;
+    abstract public function getSection(): Section;
 
     /**
      * Retrieves the public IDs
@@ -192,7 +199,7 @@ abstract class BaseParser
     public function _ensureSubmissionDoesNotExist(): self
     {
         foreach ($this->getPublicIds() as $type => $id) {
-            if (\Application::getSubmissionDAO()->getByPubId($type, $id, $this->getContextId())) {
+            if (Repo::submission()->dao->getByPubId($type, $id, $this->getContextId())) {
                 throw new AlreadyExistsException(__('plugins.importexport.articleImporter.alreadyExists', ['type' => $type, 'id' => $id]));
             }
         }
@@ -243,7 +250,7 @@ abstract class BaseParser
     /**
      * Includes a section into the issue custom order
      */
-    public function includeSection(\Section $section): void
+    public function includeSection(Section $section): void
     {
         static $cache = [];
 
@@ -251,10 +258,9 @@ abstract class BaseParser
         if (!isset($cache[$this->getIssue()->getId()][$section->getId()])) {
             // Adds it to the list
             $cache[$this->getIssue()->getId()][$section->getId()] = true;
-            $sectionDao = \Application::getSectionDAO();
             // Checks whether the section is already present in the issue
-            if (!$sectionDao->getCustomSectionOrder($this->getIssue()->getId(), $section->getId())) {
-                $sectionDao->insertCustomSectionOrder($this->getIssue()->getId(), $section->getId(), count($cache[$this->getIssue()->getId()]));
+            if (!Repo::section()->getCustomSectionOrder($this->getIssue()->getId(), $section->getId())) {
+                Repo::section()->upsertCustomSectionOrder($this->getIssue()->getId(), $section->getId(), count($cache[$this->getIssue()->getId()]));
             }
         }
     }
@@ -282,9 +288,8 @@ abstract class BaseParser
     /**
      * Looks in $issueFolder for a cover image, and applies it to $issue if found
      */
-    public function setIssueCover(string $issueFolder, \Issue &$issue)
+    public function setIssueCover(string $issueFolder, Issue $issue)
     {
-        $issueDao = \DAORegistry::getDAO('IssueDAO');
         $issueCover = null;
         foreach ($this->getConfiguration()->getImageExtensions() as $ext) {
             $checkFile = $issueFolder . DIRECTORY_SEPARATOR . $this->getConfiguration()->getIssueCoverFilename() . '.' . $ext;
@@ -294,14 +299,13 @@ abstract class BaseParser
             }
         }
         if ($issueCover) {
-            import('classes.file.PublicFileManager');
-            $publicFileManager = new \PublicFileManager();
+            $publicFileManager = new PublicFileManager();
             $fileparts = explode('.', $issueCover);
             $ext = array_pop($fileparts);
             $newFileName = 'cover_issue_' . $issue->getId() . '_' . $this->getLocale() . '.' . $ext;
             $publicFileManager->copyContextFile($this->getContextId(), $issueCover, $newFileName);
             $issue->setCoverImage($newFileName, $this->getLocale());
-            $issueDao->updateObject($issue);
+            Repo::issue()->edit($issue, []);
         }
     }
 
@@ -314,13 +318,13 @@ abstract class BaseParser
      *
      * @return int
      */
-    protected function _getGenreId($contextId, $extension)
+    protected function _getGenreId(int $contextId, string $extension)
     {
         if (isset($this->_cachedGenres[$contextId][$extension])) {
             return $this->_cachedGenres[$contextId][$extension];
         }
 
-        $genreDao = \DAORegistry::getDAO('GenreDAO');
+        $genreDao = DAORegistry::getDAO('GenreDAO');
         if (in_array($extension, $this->getConfiguration()->getImageExtensions())) {
             $genre = $genreDao->getByKey('IMAGE', $contextId);
             $genreId = $genre->getId();
@@ -335,10 +339,9 @@ abstract class BaseParser
     /**
      * Creates a default author for articles with no authors
      */
-    protected function _createDefaultAuthor(\Publication $publication): \Author
+    protected function _createDefaultAuthor(Publication $publication): Author
     {
-        $authorDao = \DAORegistry::getDAO('AuthorDAO');
-        $author = $authorDao->newDataObject();
+        $author = Repo::author()->dao->newDataObject();
         $author->setData('givenName', $this->getConfiguration()->getContext()->getName($this->getLocale()), $this->getLocale());
         $author->setData('seq', 1);
         $author->setData('publicationId', $publication->getId());
@@ -347,7 +350,7 @@ abstract class BaseParser
         $author->setData('primaryContact', true);
         $author->setData('userGroupId', $this->getConfiguration()->getAuthorGroupId());
 
-        $authorDao->insertObject($author);
+        Repo::author()->add($author);
         return $author;
     }
 }

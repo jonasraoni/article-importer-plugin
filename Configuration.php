@@ -1,45 +1,52 @@
 <?php
 /**
- * @file plugins/importexport/articleImporter/Configuration.inc.php
+ * @file Configuration.php
  *
- * Copyright (c) 2014-2022 Simon Fraser University
- * Copyright (c) 2000-2022 John Willinsky
+ * Copyright (c) 2014-2025 Simon Fraser University
+ * Copyright (c) 2000-2025 John Willinsky
  * Distributed under the GNU GPL v3. For full terms see the file docs/COPYING.
  *
  * @class Configuration
- * @ingroup plugins_importexport_articleImporter
- *
  * @brief Keeps the import options and common shared settings
  */
 
-namespace PKP\Plugins\ImportExport\ArticleImporter;
+namespace APP\plugins\importexport\articleImporter;
+
+use APP\core\Application;
+use PKP\db\DAORegistry;
+use PKP\security\Role;
+use PKP\context\Context;
+use PKP\user\User;
+use PKP\submission\Genre;
+use APP\facades\Repo;
+use PKP\userGroup\relationships\UserGroupStage;
 
 class Configuration
 {
     /** @var string Default title for sections */
-    private $_defaultSectionName;
+    private string $_defaultSectionName;
     /** @var string[] List of classes that can parse XML articles */
-    private $_parsers;
+    private array $_parsers;
     /** @var \Context Context */
-    private $_context;
-    /** @var \User User instance */
-    private $_user;
-    /** @var \User Editor instance */
-    private $_editor;
+    private Context $_context;
+    /** @var User User instance */
+    private User $_user;
+    /** @var User Editor instance */
+    private User $_editor;
     /** @var string Default email */
-    private $_email;
+    private string $_email;
     /** @var string Import path */
-    private $_importPath;
+    private string $_importPath;
     /** @var int Editor's user group ID */
-    private $_editorGroupId;
+    private int $_editorGroupId;
     /** @var int|null Author's user group ID */
-    private $_authorGroupId;
-    /** @var \Genre Submission genre instance */
-    private $_genre;
+    private ?int $_authorGroupId;
+    /** @var Genre Submission genre instance */
+    private Genre $_genre;
     /** @var string[] File extensions recognized as images */
-    private $_imageExt;
+    private array $_imageExt;
     /** @var string base filename for issue covers */
-    private $_issueCoverFilename;
+    private string $_issueCoverFilename;
 
     /**
      * Constructor
@@ -56,12 +63,12 @@ class Configuration
         $this->_defaultSectionName = $defaultSectionName;
         $this->_parsers = $parsers;
 
-        if (!$this->_context = \Application::getContextDAO()->getByPath($contextPath)) {
+        if (!$this->_context = Application::getContextDAO()->getByPath($contextPath)) {
             throw new \InvalidArgumentException(__('plugins.importexport.articleImporter.unknownJournal', ['journal' => $contextPath]));
         }
 
         [$this->_user, $this->_editor] = array_map(function ($username) {
-            if (!$entity = \DAORegistry::getDAO('UserDAO')->getByUsername($username)) {
+            if (!$entity = Repo::user()->getByUsername($username)) {
                 throw new \InvalidArgumentException(__('plugins.importexport.articleImporter.unknownUser', ['username' => $username]));
             }
             return $entity;
@@ -78,11 +85,10 @@ class Configuration
         $this->_importPath = $importPath;
 
         // Finds the user group ID for the editor
-        $userGroupDao = \DAORegistry::getDAO('UserGroupDAO');
-        $userGroupIds = $userGroupDao->getUserGroupIdsByRoleId(\ROLE_ID_MANAGER, $this->_context->getId());
-        foreach ($userGroupIds as $id) {
-            if ($userGroupDao->userGroupAssignedToStage($id, \WORKFLOW_STAGE_ID_PRODUCTION)) {
-                $this->_editorGroupId = $id;
+        $editorUserGroups = Repo::userGroup()->getByRoleIds([Role::ROLE_ID_MANAGER], $this->_context->getId());
+        foreach ($editorUserGroups as $userGroup) {
+            if (UserGroupStage::withUserGroupId($userGroup->getId())->withStageId(\WORKFLOW_STAGE_ID_PRODUCTION)->count()) {
+                $this->_editorGroupId = $userGroup->getId();
                 break;
             }
         }
@@ -91,12 +97,11 @@ class Configuration
         }
 
         // Finds the user group ID for the authors
-        $userGroupDao = \DAORegistry::getDAO('UserGroupDAO');
-        $userGroupIds = $userGroupDao->getUserGroupIdsByRoleId(\ROLE_ID_AUTHOR, $this->_context->getId());
-        $this->_authorGroupId = reset($userGroupIds);
+        $authorUserGroups = Repo::userGroup()->getByRoleIds([Role::ROLE_ID_AUTHOR], $this->_context->getId());
+        $this->_authorGroupId = $authorUserGroups->first()->getId();
 
         // Retrieves the genre for submissions
-        $this->_genre = \DAORegistry::getDAO('GenreDAO')->getByKey('SUBMISSION', $this->_context->getId());
+        $this->_genre = DAORegistry::getDAO('GenreDAO')->getByKey('SUBMISSION', $this->_context->getId());
 
         $this->_imageExt = ['tif', 'tiff', 'png', 'jpg', 'jpeg'];
         $this->_issueCoverFilename = 'cover';
@@ -105,7 +110,7 @@ class Configuration
     /**
      * Retrieves the context instance
      */
-    public function getContext(): \Context
+    public function getContext(): Context
     {
         return $this->_context;
     }
@@ -113,7 +118,7 @@ class Configuration
     /**
      * Retrieves the user instance
     */
-    public function getUser(): \User
+    public function getUser(): User
     {
         return $this->_user;
     }
@@ -121,7 +126,7 @@ class Configuration
     /**
      * Retrieves the user instance
      */
-    public function getEditor(): \User
+    public function getEditor(): User
     {
         return $this->_editor;
     }
@@ -165,7 +170,7 @@ class Configuration
     /**
      * Retrieves the submission genre
      */
-    public function getSubmissionGenre(): \Genre
+    public function getSubmissionGenre(): Genre
     {
         return $this->_genre;
     }
