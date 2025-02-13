@@ -14,7 +14,6 @@ namespace APP\plugins\importexport\articleImporter;
 
 use APP\plugins\importexport\articleImporter\exceptions\ArticleSkippedException;
 
-use PKP\session\SessionManager;
 use PKP\core\Registry;
 use PKP\db\DAORegistry;
 use PKP\plugins\Hook;
@@ -34,9 +33,8 @@ class ArticleImporterPlugin extends ImportExportPlugin
      */
     public function executeCLI($scriptName, &$args): void
     {
+        // Extend memory and execution time limits
         ini_set('memory_limit', -1);
-        SessionManager::getManager();
-        // Disable the time limit
         set_time_limit(0);
 
         // Expects 5 non-empty arguments

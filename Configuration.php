@@ -87,8 +87,8 @@ class Configuration
         // Finds the user group ID for the editor
         $editorUserGroups = Repo::userGroup()->getByRoleIds([Role::ROLE_ID_MANAGER], $this->_context->getId());
         foreach ($editorUserGroups as $userGroup) {
-            if (UserGroupStage::withUserGroupId($userGroup->getId())->withStageId(\WORKFLOW_STAGE_ID_PRODUCTION)->count()) {
-                $this->_editorGroupId = $userGroup->getId();
+            if (UserGroupStage::withUserGroupId($userGroup->id)->withStageId(\WORKFLOW_STAGE_ID_PRODUCTION)->count()) {
+                $this->_editorGroupId = $userGroup->id;
                 break;
             }
         }
@@ -98,7 +98,7 @@ class Configuration
 
         // Finds the user group ID for the authors
         $authorUserGroups = Repo::userGroup()->getByRoleIds([Role::ROLE_ID_AUTHOR], $this->_context->getId());
-        $this->_authorGroupId = $authorUserGroups->first()->getId();
+        $this->_authorGroupId = $authorUserGroups->first()->id;
 
         // Retrieves the genre for submissions
         $this->_genre = DAORegistry::getDAO('GenreDAO')->getByKey('SUBMISSION', $this->_context->getId());
