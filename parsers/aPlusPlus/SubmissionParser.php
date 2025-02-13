@@ -63,7 +63,6 @@ trait SubmissionParser
      */
     private function _assignEditor(): void
     {
-        $stageAssignmentDao = DAORegistry::getDAO('StageAssignmentDAO');
-        $stageAssignmentDao->build($this->getSubmission()->getId(), $this->getConfiguration()->getEditorGroupId(), $this->getConfiguration()->getEditor()->getId());
+        Repo::stageAssignment()->build($this->getSubmission()->getId(), $this->getConfiguration()->getEditorGroupId(), $this->getConfiguration()->getEditor()->getId());
     }
 }

@@ -24,6 +24,7 @@ use APP\core\Application;
 use PKP\i18n\LocaleConversion;
 use APP\core\Services;
 use APP\facades\Repo;
+use PKP\controlledVocab\ControlledVocab;
 
 trait PublicationParser
 {
@@ -242,7 +243,7 @@ trait PublicationParser
             }
         }
         if (count($keywords)) {
-            $submissionKeywordDAO->insertKeywords($keywords, $publication->getId());
+            Repo::controlledVocab()->insertBySymbolic(ControlledVocab::CONTROLLED_VOCAB_SUBMISSION_KEYWORD, $keywords, Application::ASSOC_TYPE_PUBLICATION, $publication->getId());
         }
     }
 }

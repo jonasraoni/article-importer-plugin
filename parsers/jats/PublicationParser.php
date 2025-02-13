@@ -30,6 +30,7 @@ use PKP\submissionFile\SubmissionFile;
 use PKP\file\TemporaryFileManager;
 use PKP\core\PKPString;
 use APP\facades\Repo;
+use PKP\controlledVocab\ControlledVocab;
 
 trait PublicationParser
 {
@@ -449,7 +450,6 @@ trait PublicationParser
      */
     private function _processKeywords(Publication $publication): void
     {
-        $submissionKeywordDAO = DAORegistry::getDAO('SubmissionKeywordDAO');
         $keywords = [];
         foreach ($this->select('front/article-meta/kwd-group') as $node) {
             $locale = $this->getLocale($node->getAttribute('xml:lang'));
@@ -458,7 +458,7 @@ trait PublicationParser
             }
         }
         if (count($keywords)) {
-            $submissionKeywordDAO->insertKeywords($keywords, $publication->getId());
+            Repo::controlledVocab()->insertBySymbolic(ControlledVocab::CONTROLLED_VOCAB_SUBMISSION_KEYWORD, $keywords, Application::ASSOC_TYPE_PUBLICATION, $publication->getId());
         }
     }
 }
