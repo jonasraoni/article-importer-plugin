@@ -32,7 +32,7 @@ trait IssueParser
     private function _rollbackIssue(): void
     {
         if ($this->_isIssueOwner) {
-            Repo::issue()->deleteObject($this->_issue);
+            Repo::issue()->delete($this->_issue);
         }
     }
 
