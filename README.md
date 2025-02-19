@@ -1,3 +1,7 @@
+# This repository has been moved to [PKP](https://github.com/pkp/articleImporter).
+
+---
+
 # OJS Article Importer Plugin
 Plugin to import A++ and JATS articles up to OJS 3.3.0
 
