@@ -114,8 +114,8 @@ trait EntityManager
         }
 
         // Includes a section into the issue custom order
-        if (!Repo::section()->getCustomSectionOrder($this->getIssue()->getId(), $section->getId())) {
-            Repo::section()->upsertCustomSectionOrder($this->getIssue()->getId(), $section->getId(), count(static::$cache['section']));
+        if (!Repo::section()->getCustomSectionOrder($this->buildIssue()->getId(), $section->getId())) {
+            Repo::section()->upsertCustomSectionOrder($this->buildIssue()->getId(), $section->getId(), count(static::$cache['section']));
         }
     }
 
