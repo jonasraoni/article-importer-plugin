@@ -40,13 +40,11 @@ use APP\facades\Repo;
 use DateTimeImmutable;
 use Exception;
 use Illuminate\Database\Connection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PKP\publication\helpers\PublicationVersionInfo;
 use PKP\Services\PKPFileService;
 use PKP\core\Core;
 use PKP\i18n\LocaleConversion;
-use PKP\submission\Genre;
 use PKP\submissionFile\SubmissionFile;
 use PKP\controlledVocab\ControlledVocab;
 use PKP\decision\Decision;
@@ -1160,6 +1158,10 @@ class OreImporter
 
         $publications = $submission->getPublishedPublications();
         $doi = $submission->getCurrentPublication()->getDoi();
+        if (!$doi) {
+            return;
+        }
+
         $doiParts = explode('.', $doi);
         $articleId = array_slice($doiParts, -2, 1)[0];
 
@@ -1195,11 +1197,35 @@ class OreImporter
             return;
         }
 
-        // Group reviews by version_id
-        $reviews_by_version = [];
+        // Delete all existing review assignments for this submission in external review stage
+        // This ensures we can re-run the import and have a synchronized database
+        $existing_assignments = Repo::reviewAssignment()->getCollector()
+            ->filterBySubmissionIds([$submission->getId()])
+            ->filterByStageId(WORKFLOW_STAGE_ID_EXTERNAL_REVIEW)
+            ->getMany();
+
+        foreach ($existing_assignments as $assignment) {
+            // Delete associated comments first
+            $submission_comment_dao = DAORegistry::getDAO('SubmissionCommentDAO'); /** @var SubmissionCommentDAO $submission_comment_dao */
+            $comments = $submission_comment_dao->getReviewerCommentsByReviewerId(
+                $assignment->getSubmissionId(),
+                $assignment->getReviewerId(),
+                $assignment->getId()
+            );
+            while ($comment = $comments->next()) {
+                $submission_comment_dao->deleteObject($comment);
+            }
+            Repo::reviewAssignment()->delete($assignment);
+        }
+
+        // Group reviews by version_number (which determines the review round)
+        $reviews_by_version_number = [];
         foreach ($reviews as $review) {
-            $version_id = $review->version_id;
-            $reviews_by_version[$version_id][] = $review;
+            $version_number = (int) $review->version_number;
+            if (!isset($reviews_by_version_number[$version_number])) {
+                $reviews_by_version_number[$version_number] = [];
+            }
+            $reviews_by_version_number[$version_number][] = $review;
         }
 
         // Get reviewer user group ID
@@ -1212,33 +1238,33 @@ class OreImporter
         // Get review round DAO
         $review_round_dao = DAORegistry::getDAO('ReviewRoundDAO'); /** @var ReviewRoundDAO $review_round_dao */
 
-        // Process each version
-        foreach ($reviews_by_version as $version_id => $version_reviews) {
+        // Process each version (grouped by version_number)
+        foreach ($reviews_by_version_number as $version_number => $version_reviews) {
             $review = reset($version_reviews);
             // Find the publication for this version
             $publication = null;
             foreach ($publications as $pub) {
-                if ($pub->getData('seq') == $review->version_number) {
+                if ($pub->getData('seq') == $version_number) {
                     $publication = $pub;
                     break;
                 }
             }
 
             if (!$publication) {
-                error_log("Publication not found for version {$version_id}, skipping reviews");
+                error_log("Publication not found for version number {$version_number}, skipping reviews");
                 continue;
             }
 
-            // Create a single review round for this version (round 1)
+            // Create a review round for this version using version_number as the round number
             $review_round = $review_round_dao->build(
                 $submission->getId(),
                 $publication->getId(),
                 WORKFLOW_STAGE_ID_EXTERNAL_REVIEW,
-                1
+                $version_number
             );
 
             if (!$review_round) {
-                error_log("Failed to create review round for version {$version_id}");
+                error_log("Failed to create review round for version number {$version_number}");
                 continue;
             }
 
@@ -1288,6 +1314,7 @@ class OreImporter
                     if ($existing_assignment) {
                         // Update existing assignment
                         Repo::reviewAssignment()->edit($existing_assignment, [
+                            'round' => (int) $review_record->version_number,
                             'dateCompleted' => $review_record->published_date
                                 ? $this->parseDateString($review_record->published_date)?->format(static::DATETIME_FORMAT)
                                 : Core::getCurrentDate(),
@@ -1303,7 +1330,7 @@ class OreImporter
                             'reviewerId' => $reviewer_user->getId(),
                             'reviewRoundId' => $review_round->getId(),
                             'stageId' => WORKFLOW_STAGE_ID_EXTERNAL_REVIEW,
-                            'round' => 1,
+                            'round' => (int) $review_record->version_number,
                             'dateAssigned' => Core::getCurrentDate(),
                             'dateCompleted' => $review_record->published_date
                                 ? $this->parseDateString($review_record->published_date)?->format(static::DATETIME_FORMAT)
@@ -1314,7 +1341,8 @@ class OreImporter
                             'reviewMethod' => ReviewAssignment::SUBMISSION_REVIEW_METHOD_OPEN,
                         ]);
 
-                        Repo::reviewAssignment()->add($review_assignment);
+                        $review_assignment_id = Repo::reviewAssignment()->add($review_assignment);
+                        $review_assignment = Repo::reviewAssignment()->get($review_assignment_id);
                     }
 
                     // Create review comment if provided
