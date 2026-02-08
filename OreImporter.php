@@ -52,6 +52,7 @@ use PKP\db\DAORegistry;
 use PKP\security\Role;
 use PKP\security\Validation;
 use PKP\submission\reviewAssignment\ReviewAssignment;
+use PKP\submission\reviewer\recommendation\ReviewerRecommendation;
 use PKP\submission\reviewRound\ReviewRoundDAO;
 use PKP\submission\SubmissionComment;
 use PKP\submission\SubmissionCommentDAO;
@@ -1311,10 +1312,13 @@ class OreImporter
                         ->getMany()
                         ->first();
 
+                    $reviewer_recommendation_id = $this->getReviewerRecommendationIdForDecision($review_record->decision ?? null);
+
                     if ($existing_assignment) {
                         // Update existing assignment
                         Repo::reviewAssignment()->edit($existing_assignment, [
                             'round' => (int) $review_record->version_number,
+                            'reviewerRecommendationId' => $reviewer_recommendation_id,
                             'dateCompleted' => $review_record->published_date
                                 ? $this->parseDateString($review_record->published_date)?->format(static::DATETIME_FORMAT)
                                 : Core::getCurrentDate(),
@@ -1338,6 +1342,7 @@ class OreImporter
                             'status' => ReviewAssignment::REVIEW_ASSIGNMENT_STATUS_COMPLETE,
                             'dateConfirmed' => Core::getCurrentDate(),
                             'dateAcknowledged' => Core::getCurrentDate(),
+                            'reviewerRecommendationId' => $reviewer_recommendation_id,
                             'reviewMethod' => ReviewAssignment::SUBMISSION_REVIEW_METHOD_OPEN,
                         ]);
 
@@ -1412,6 +1417,47 @@ class OreImporter
         ];
 
         return $decision_map[$decision] ?? null;
+    }
+
+    /**
+     * Decision to reviewer recommendation title (for matching against ReviewerRecommendation::getLocalizedData('title')).
+     */
+    private const DECISION_TO_RECOMMENDATION_TITLE = [
+        'APPROVED' => 'Approved',
+        'APPROVED_WITH_RESERVATIONS' => 'Approved with Reservations',
+        'NOT_APPROVED' => 'Not Approved',
+    ];
+
+    /**
+     * Resolve reviewerRecommendationId for the given F1000R decision.
+     * Finds the ReviewerRecommendation for the context whose localized title matches the mapped recommendation title.
+     *
+     * @param string|null $decision F1000R decision (APPROVED, APPROVED_WITH_RESERVATIONS, NOT_APPROVED)
+     * @return int|null reviewer_recommendation_id or null if not found / no decision
+     */
+    private function getReviewerRecommendationIdForDecision(?string $decision): ?int
+    {
+        if ($decision === null || $decision === '') {
+            return null;
+        }
+
+        $recommendationTitle = self::DECISION_TO_RECOMMENDATION_TITLE[$decision] ?? null;
+        if ($recommendationTitle === null) {
+            return null;
+        }
+
+        $recommendations = ReviewerRecommendation::query()
+            ->withContextId($this->_contextId)
+            ->get();
+
+        foreach ($recommendations as $recommendation) {
+            $title = $recommendation->getLocalizedData('title');
+            if ($title === $recommendationTitle) {
+                return (int) $recommendation->getKey();
+            }
+        }
+
+        return null;
     }
 
     /**
