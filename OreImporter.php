@@ -40,6 +40,7 @@ use APP\facades\Repo;
 use DateTimeImmutable;
 use Exception;
 use Illuminate\Database\Connection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PKP\publication\helpers\PublicationVersionInfo;
 use PKP\Services\PKPFileService;
@@ -51,8 +52,11 @@ use PKP\decision\Decision;
 use PKP\db\DAORegistry;
 use PKP\security\Role;
 use PKP\security\Validation;
+use PKP\stageAssignment\StageAssignment;
 use PKP\submission\reviewAssignment\ReviewAssignment;
 use PKP\submission\reviewer\recommendation\ReviewerRecommendation;
+use PKP\submission\reviewRound\authorResponse\AuthorResponse;
+use PKP\submission\reviewRound\ReviewRound;
 use PKP\submission\reviewRound\ReviewRoundDAO;
 use PKP\submission\SubmissionComment;
 use PKP\submission\SubmissionCommentDAO;
@@ -1397,7 +1401,125 @@ class OreImporter
                     );
                 }
             }
+
+            // Import author responses: approved comments linked to reports in this round
+            $report_ids = array_map('intval', array_keys($reviews_by_review_id));
+            if (!empty($report_ids)) {
+                $this->importAuthorResponsesForRound(
+                    $submission,
+                    $publication,
+                    $review_round,
+                    $report_ids
+                );
+            }
         }
+    }
+
+    /**
+     * Fetches approved comments from F1000R for the given report IDs (f1000r_comment_report.report_id).
+     * Only comments in f1000r_comment with status = 'APPROVED' are returned.
+     * Each item has: text, creation_date, last_updated (raw from PostgreSQL).
+     *
+     * @param int[] $reportIds
+     * @return list<object{text: string, creation_date: mixed, last_updated: mixed}>
+     */
+    private function getApprovedCommentsForReportIds(array $reportIds): array
+    {
+        if (empty($reportIds)) {
+            return [];
+        }
+
+        $rows = $this->_connection->table('f1000r_comment_report as cr')
+            ->join('f1000r_comment as c', 'c.id', '=', 'cr.comment_id')
+            ->whereIn('cr.report_id', $reportIds)
+            ->where('c.status', '=', 'APPROVED')
+            ->orderBy('c.creation_date')
+            ->select(['c.text', 'c.creation_date', 'c.last_updated'])
+            ->get();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $text = $row->text !== null ? trim((string) $row->text) : '';
+            if ($text !== '') {
+                $out[] = (object) [
+                    'text' => $row->text,
+                    'creation_date' => $row->creation_date,
+                    'last_updated' => $row->last_updated,
+                ];
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Creates or replaces author response(s) for the given review round using F1000R approved comments.
+     * One AuthorResponse is created per approved comment, with createdAt/updatedAt from the PostgreSQL comment.
+     */
+    private function importAuthorResponsesForRound(
+        Submission $submission,
+        Publication $publication,
+        ReviewRound $review_round,
+        array $reportIds
+    ): void {
+        $approved_comments = $this->getApprovedCommentsForReportIds($reportIds);
+        if (empty($approved_comments)) {
+            return;
+        }
+
+        // Remove existing author responses for this round so re-import stays in sync
+        AuthorResponse::withReviewRoundIds([$review_round->getId()])->delete();
+
+        $author_stage_assignment = StageAssignment::withSubmissionIds([$submission->getId()])
+            ->withRoleIds([Role::ROLE_ID_AUTHOR])
+            ->withStageIds([$review_round->getStageId()])
+            ->get()
+            ->first();
+        $author_user_id = $author_stage_assignment !== null ? $author_stage_assignment->userId : null;
+
+        if ($author_user_id === null) {
+            return;
+        }
+
+        $authors = $publication->getData('authors');
+        $associated_author_ids = $authors ? $authors->map(fn ($a) => $a->getId())->all() : [];
+
+        foreach ($approved_comments as $comment) {
+            $created_at = $this->formatCommentDateForOjs($comment->creation_date);
+            $updated_at = $this->formatCommentDateForOjs($comment->last_updated ?? $comment->creation_date);
+
+            $reviewResponse = AuthorResponse::create([
+                'reviewRoundId' => $review_round->getId(),
+                'authorResponse' => [$this->_locale => $comment->text],
+                'userId' => $author_user_id,
+            ]);
+
+            // Set createdAt and updatedAt from F1000R comment (AuthorResponse fillable does not include them)
+            DB::table('review_round_author_responses')
+                ->where('response_id', $reviewResponse->id)
+                ->update([
+                    'created_at' => $created_at,
+                    'updated_at' => $updated_at,
+                ]);
+
+            if (!empty($associated_author_ids)) {
+                $reviewResponse->associateAuthorsToResponse($associated_author_ids);
+            }
+        }
+    }
+
+    /**
+     * Formats a PostgreSQL timestamp (or string) to OJS datetime string for created_at/updated_at.
+     */
+    private function formatCommentDateForOjs(mixed $dateValue): string
+    {
+        if ($dateValue === null) {
+            return Core::getCurrentDate();
+        }
+        if ($dateValue instanceof \DateTimeInterface) {
+            return $dateValue->format(static::DATETIME_FORMAT);
+        }
+        $parsed = $this->parseDateString((string) $dateValue);
+        return $parsed ? $parsed->format(static::DATETIME_FORMAT) : Core::getCurrentDate();
     }
 
     /**
