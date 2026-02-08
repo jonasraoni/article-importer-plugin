@@ -88,7 +88,8 @@ class ArticleImporterPlugin extends ImportExportPlugin
 
             PluginRegistry::loadCategory('pubIds', true, $configuration->getContext()->getId());
 
-            // Iterates through all the found article entries, already sorted by ascending volume > issue > article
+            // Iterates through all the found article entries, already sorted by ascending volume > issue > article.
+            // Multi-version importers set sourcePublicationId when creating versions 2+ (OreImporter, JATS and aPlusPlus PublicationParsers).
             $iterator = $configuration->getArticleIterator();
             $count = 0;
             /** @var ArticleEntry */

@@ -38,10 +38,20 @@ trait PublicationParser
     {
         $publicationDate = $this->getPublicationDate() ?: $this->getIssue()->getDatePublished();
         $version = $this->getArticleVersion()->getVersion();
+        $submission = $this->getSubmission();
 
         // Create the publication
         $publication = Repo::publication()->newDataObject();
-        $publication->setData('submissionId', $this->getSubmission()->getId());
+        $publication->setData('submissionId', $submission->getId());
+        if ($version > 1) {
+            $source_publication = Repo::publication()->getCollector()
+                ->filterBySubmissionIds([$submission->getId()])
+                ->getMany()
+                ->first(fn ($p) => (int) $p->getData('seq') === $version - 1);
+            if ($source_publication) {
+                $publication->setData('sourcePublicationId', $source_publication->getId());
+            }
+        }
         $publication->setData('status', Submission::STATUS_PUBLISHED);
         $publication->setData('version', $version);
         $publication->setVersion(new PublicationVersionInfo(VersionStage::VERSION_OF_RECORD, $version, 0));

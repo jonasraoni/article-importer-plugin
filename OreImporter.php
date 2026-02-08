@@ -154,13 +154,16 @@ class OreImporter
             throw new Exception("No published versions found for article {$this->_articleId}");
         }
 
+        $source_publication = null;
         foreach ($versions as $version) {
             try {
                 $this->_version = $version;
+                $this->_publication = null;
                 $this->_authorCount = 0; // Reset author count for each version
                 $version = $this->getVersion();
                 $this->_locale = $this->getLocale();
-                $publications[] = $this->buildPublication();
+                $publications[] = $this->buildPublication($source_publication);
+                $source_publication = $publications[array_key_last($publications)];
             } catch (Exception $e) {
                 $this->rollback();
                 throw $e;
@@ -449,8 +452,10 @@ class OreImporter
 
     /**
      * Parse, import and retrieve the publication
+     *
+     * @param Publication|null $source_publication Previous version's publication; used to set sourcePublicationId when creating a new version
      */
-    public function buildPublication(): Publication
+    public function buildPublication(?Publication $source_publication = null): Publication
     {
         if ($this->_publication) {
             return $this->_publication;
@@ -464,6 +469,9 @@ class OreImporter
         if (!$publication) {
             // Create the publication
             $publication = Repo::publication()->newDataObject();
+            if ($source_publication !== null) {
+                $publication->setData('sourcePublicationId', $source_publication->getId());
+            }
         }
 
         $publication->setData('submissionId', $submission->getId());
