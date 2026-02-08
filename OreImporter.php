@@ -1325,6 +1325,7 @@ class OreImporter
                             'status' => ReviewAssignment::REVIEW_ASSIGNMENT_STATUS_COMPLETE,
                             'dateConfirmed' => Core::getCurrentDate(),
                             'dateAcknowledged' => Core::getCurrentDate(),
+                            'isReviewPubliclyVisible' => 1,
                         ]);
                         $review_assignment = $existing_assignment;
                     } else {
@@ -1344,6 +1345,7 @@ class OreImporter
                             'dateAcknowledged' => Core::getCurrentDate(),
                             'reviewerRecommendationId' => $reviewer_recommendation_id,
                             'reviewMethod' => ReviewAssignment::SUBMISSION_REVIEW_METHOD_OPEN,
+                            'isReviewPubliclyVisible' => 1,
                         ]);
 
                         $review_assignment_id = Repo::reviewAssignment()->add($review_assignment);
