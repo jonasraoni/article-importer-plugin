@@ -13,6 +13,7 @@
 namespace APP\plugins\importexport\articleImporter\parsers\jats;
 
 use APP\plugins\importexport\articleImporter\EntityManager;
+use APP\plugins\importexport\articleImporter\Funders;
 use APP\publication\enums\VersionStage;
 use APP\submission\Submission;
 use DateTimeImmutable;
@@ -154,12 +155,15 @@ trait PublicationParser
         $publication->setData('copyrightYear', $this->selectText('front/article-meta/permissions/copyright-year') ?: $publicationDate->format('Y'));
         $publication->setData('licenseUrl', $this->selectText('front/article-meta/permissions/license/attribute::xlink:href'));
 
+        $this->_processFundingGroup($publication);
+
         $publication = $this->_processCitations($publication);
         $this->setPublicationCoverImage($publication);
         $this->_processCategories($publication);
 
         // Inserts the publication and updates the submission
         Repo::publication()->add($publication);
+        $this->_processFundingAwardGroups($publication);
         $this->_processKeywords($publication);
         // Reload object with keywords (otherwise they will be cleared later on)
         $publication = Repo::publication()->get($publication->getId());
@@ -210,6 +214,63 @@ trait PublicationParser
             $publication->setData('citationsRaw', $citations);
         }
         return $publication;
+    }
+
+    /**
+     * Parse funding-group: set fundingStatement on publication (localized).
+     */
+    private function _processFundingGroup(Publication $publication): void
+    {
+        $any_set = false;
+        /** @var DOMElement $node */
+        foreach ($this->select('front/article-meta/funding-group/funding-statement') as $node) {
+            $value = trim($this->getTextContent($node, fn ($n, $content) => $content));
+            if ($value !== '') {
+                $locale = $this->getLocale($node->getAttribute('xml:lang'));
+                $publication->setData('fundingStatement', $value, $locale);
+                $any_set = true;
+            }
+        }
+        if (!$any_set) {
+            $stmt = $this->selectText('front/article-meta/funding-group/funding-statement');
+            if ($stmt !== '') {
+                $publication->setData('fundingStatement', $stmt, $this->getLocale());
+            }
+        }
+    }
+
+    /**
+     * Create funders and awards from JATS award-group nodes (Funding plugin). Submission-level.
+     */
+    private function _processFundingAwardGroups(Publication $publication): void
+    {
+        $award_groups = [];
+        /** @var DOMElement $awardGroup */
+        foreach ($this->select('front/article-meta/funding-group/award-group') as $awardGroup) {
+            $funder_name = $this->selectText('funding-source', $awardGroup);
+            $funder_identification = $this->selectText('attribute::xlink:href', $awardGroup);
+            $award_ids = [];
+            foreach ($this->select('award-id', $awardGroup) as $awardIdNode) {
+                $id = trim($awardIdNode->textContent ?? '');
+                if ($id !== '') {
+                    $award_ids[] = $id;
+                }
+            }
+            if ($funder_name !== '') {
+                $award_groups[] = [
+                    'funderName' => $funder_name,
+                    'funderIdentification' => $funder_identification,
+                    'awardNumbers' => $award_ids,
+                ];
+            }
+        }
+        if ($award_groups !== []) {
+            Funders::createFundersFromAwardGroups(
+                $award_groups,
+                $publication->getData('submissionId'),
+                $this->getContextId()
+            );
+        }
     }
 
     /**

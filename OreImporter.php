@@ -30,6 +30,7 @@ and table_name ilike '%contributor_role%';
 namespace APP\plugins\importexport\articleImporter;
 
 use APP\author\Author;
+use APP\plugins\importexport\articleImporter\Funders;
 use APP\publication\enums\VersionStage;
 use APP\publication\Publication;
 use APP\section\Section;
@@ -522,6 +523,9 @@ class OreImporter
         $publication = $this->processCitations($publication);
         $this->processCategories($publication);
 
+        // Funding: call processFundersFromAwardGroups() with award_groups when you have them (e.g. from DB/XML)
+        // $this->processFundersFromAwardGroups($award_groups);
+
         if ($publication->getId()) {
             Repo::publication()->edit($publication, []);
         } else {
@@ -558,6 +562,16 @@ class OreImporter
         Repo::publication()->publish($publication);
 
         return $this->_publication = $publication;
+    }
+
+    /**
+     * Create funders and awards from JATS-style award-group data (Funding plugin).
+     * Each item: ['funderName' => string, 'funderIdentification' => string, 'awardNumbers' => string[]].
+     */
+    public function processFundersFromAwardGroups(array $award_groups): void
+    {
+        $submission = $this->buildSubmission();
+        Funders::createFundersFromAwardGroups($award_groups, $submission->getId(), $this->getContextId());
     }
 
     /**
