@@ -32,7 +32,7 @@ class Funders
     public static function isFundingPluginEnabled(int $contextId): bool
     {
         $fundingPlugin = PluginRegistry::getPlugin('generic', 'FundingPlugin') ?? PluginRegistry::loadPlugin('generic', 'funding');
-        return $fundingPlugin?->getEnabled();
+        return (bool) $fundingPlugin?->getEnabled($contextId);
     }
 
     /**
@@ -50,20 +50,25 @@ class Funders
     /**
      * Create funders and awards from JATS-style award-group data (e.g. funding-source, award-id, xlink:href).
      * Each item: ['funderName' => string, 'funderIdentification' => string, 'awardNumbers' => string[]].
-     * No-op if Funding plugin is disabled or submission already has funders.
+     * If funding data already exists for the submission, it will be replaced.
      */
     public static function createFundersFromAwardGroups(array $award_groups, int $submissionId, int $contextId): void
     {
         if (!self::isFundingPluginEnabled($contextId)) {
             return;
         }
-        if (self::submissionHasFunders($submissionId)) {
-            return;
-        }
         /** @var FunderDAO $funderDao */
         $funderDao = DAORegistry::getDAO('FunderDAO');
         /** @var FunderAwardDAO $funderAwardDao */
         $funderAwardDao = DAORegistry::getDAO('FunderAwardDAO');
+
+        // Remove existing funders (and their awards) for this submission/context
+        /** @var DAOResultFactory<Funder> $existingFunders */
+        $existingFunders = $funderDao->getBySubmissionId($submissionId, $contextId);
+        foreach ($existingFunders->toIterator() as $existingFunder) {
+            $funderDao->deleteObject($existingFunder);
+        }
+
         foreach ($award_groups as $group) {
             $funder_name = trim($group['funderName'] ?? '');
             if ($funder_name === '') {
