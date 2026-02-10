@@ -62,6 +62,7 @@ use PKP\submission\reviewRound\ReviewRoundDAO;
 use PKP\submission\SubmissionComment;
 use PKP\submission\SubmissionCommentDAO;
 use PKP\user\User;
+use PKP\statistics\PKPStatisticsHelper;
 use SplFileInfo;
 
 class OreImporter
@@ -171,7 +172,121 @@ class OreImporter
             }
         }
 
+        $this->assignOreMetricsToLatestVersion($publications);
+
         return $publications;
+    }
+
+    /**
+     * Fetch article metrics from Open Research Europe API.
+     * URL format: https://open-research-europe.ec.europa.eu/api/metrics/total/F1000_RESEARCH/ARTICLE/{articleId}
+     *
+     * @return array|null Decoded JSON with articleId, numberOfViews, numberOfPdfDownloads, numberOfXmlDownloads, etc., or null on failure
+     */
+    private function fetchOreMetrics(): ?array
+    {
+        $url = 'https://open-research-europe.ec.europa.eu/api/metrics/total/F1000_RESEARCH/ARTICLE/' . (int) $this->_articleId;
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 10,
+                'user_agent' => 'OreImporter/OJS',
+            ],
+        ]);
+        $raw = @file_get_contents($url, false, $context);
+        if ($raw === false) {
+            return null;
+        }
+        $data = json_decode($raw, true);
+        return is_array($data) ? $data : null;
+    }
+
+    /**
+     * Assign ORE API metrics to the submission, attributed to the latest version only (to avoid distorting totals).
+     * Inserts into metrics_submission: article views, PDF galley views, XML galley views.
+     */
+    private function assignOreMetricsToLatestVersion(array $publications): void
+    {
+        $metrics = $this->fetchOreMetrics();
+        if (!$metrics) {
+            return;
+        }
+
+        $views = (int) ($metrics['numberOfViews'] ?? 0);
+        $pdfDownloads = (int) ($metrics['numberOfPdfDownloads'] ?? 0);
+        $xmlDownloads = (int) ($metrics['numberOfXmlDownloads'] ?? 0);
+        if ($views === 0 && $pdfDownloads === 0 && $xmlDownloads === 0) {
+            return;
+        }
+
+        $latestPublication = $publications[array_key_last($publications)];
+        $submissionId = (int) $latestPublication->getData('submissionId');
+        $contextId = $this->_contextId;
+        $loadId = 'ore_import_' . $this->_articleId . '_' . date('Ymd');
+        $date = date('Y-m-d');
+
+        DB::table('metrics_submission')
+            ->where('context_id', $contextId)
+            ->where('submission_id', $submissionId)
+            ->where('load_id', 'like', 'ore_import_' . (int) $this->_articleId . '_%')
+            ->delete();
+
+        $pdfGalleyId = null;
+        $pdfSubmissionFileId = null;
+        $xmlGalleyId = null;
+        $xmlSubmissionFileId = null;
+        foreach ($latestPublication->getData('galleys') ?? [] as $galley) {
+            $sfId = $galley->getData('submissionFileId');
+            if (!$sfId) {
+                continue;
+            }
+            $file = Repo::submissionFile()->get($sfId);
+            if (!$file) {
+                continue;
+            }
+            $mime = $file->getData('mimetype') ?? '';
+            if ($mime === 'application/pdf') {
+                $pdfGalleyId = (int) $galley->getId();
+                $pdfSubmissionFileId = (int) $sfId;
+            }
+            if (in_array($mime, ['application/xml', 'text/xml', 'application/jats+xml'], true)) {
+                $xmlGalleyId = (int) $galley->getId();
+                $xmlSubmissionFileId = (int) $sfId;
+            }
+        }
+
+        $base = [
+            'load_id' => $loadId,
+            'context_id' => $contextId,
+            'submission_id' => $submissionId,
+            'date' => $date,
+        ];
+
+        if ($views > 0) {
+            DB::table('metrics_submission')->insert(array_merge($base, [
+                'assoc_type' => Application::ASSOC_TYPE_SUBMISSION,
+                'metric' => $views,
+            ]));
+        }
+
+        if ($pdfDownloads > 0) {
+            DB::table('metrics_submission')->insert(array_merge($base, [
+                'representation_id' => $pdfGalleyId ?: null,
+                'submission_file_id' => $pdfSubmissionFileId ?: null,
+                'file_type' => PKPStatisticsHelper::STATISTICS_FILE_TYPE_PDF,
+                'assoc_type' => Application::ASSOC_TYPE_SUBMISSION_FILE,
+                'metric' => $pdfDownloads,
+            ]));
+        }
+
+        if ($xmlDownloads > 0) {
+            DB::table('metrics_submission')->insert(array_merge($base, [
+                'representation_id' => $xmlGalleyId ?: null,
+                'submission_file_id' => $xmlSubmissionFileId ?: null,
+                'file_type' => PKPStatisticsHelper::STATISTICS_FILE_TYPE_OTHER,
+                'assoc_type' => Application::ASSOC_TYPE_SUBMISSION_FILE,
+                'metric' => $xmlDownloads,
+            ]));
+        }
     }
 
     /**
