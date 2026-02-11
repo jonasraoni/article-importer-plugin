@@ -546,11 +546,21 @@ class OreImporter
     }
 
     /**
-     * Assign editor as participant in production stage
+     * Assign editor as participant in production and external review stages
      */
     private function assignEditor(): void
     {
-        Repo::stageAssignment()->build($this->buildSubmission()->getId(), $this->getConfiguration()->getEditorGroupId(), $this->getConfiguration()->getEditor()->getId());
+        $submissionId = $this->buildSubmission()->getId();
+        $editorId = $this->getConfiguration()->getEditor()->getId();
+
+        // Production stage (required)
+        Repo::stageAssignment()->build($submissionId, $this->getConfiguration()->getEditorGroupId(), $editorId);
+
+        // External review stage (for edit decisions, participant list)
+        $editorGroupIdForReview = $this->getConfiguration()->getEditorGroupIdForStage(WORKFLOW_STAGE_ID_EXTERNAL_REVIEW);
+        if ($editorGroupIdForReview) {
+            Repo::stageAssignment()->build($submissionId, $editorGroupIdForReview, $editorId);
+        }
     }
 
     /**
@@ -1292,6 +1302,70 @@ class OreImporter
     }
 
     /**
+     * Ensures stage assignments exist for author and editor in the external review stage.
+     * Required for author responses and edit decisions to work correctly.
+     */
+    private function assignStageAssignments(Submission $submission): void
+    {
+        $submissionId = $submission->getId();
+        $config = $this->getConfiguration();
+
+        // Remove existing author stage assignments for this submission in external review
+        // so re-runs stay in sync (primary author may have changed)
+        StageAssignment::withSubmissionIds([$submissionId])
+            ->withRoleIds([Role::ROLE_ID_AUTHOR])
+            ->withStageIds([WORKFLOW_STAGE_ID_EXTERNAL_REVIEW])
+            ->delete();
+
+        // Ensure author group can participate in external review stage
+        $config->ensureAuthorGroupInStage(WORKFLOW_STAGE_ID_EXTERNAL_REVIEW);
+
+        $authorGroupId = $config->getAuthorGroupId();
+        if (!$authorGroupId) {
+            return;
+        }
+
+        // Assign primary author only
+        $publication = $submission->getCurrentPublication();
+        $authors = $publication->getData('authors');
+        $primaryAuthor = $authors ? $authors->first(fn ($a) => $a->getData('primaryContact')) : null;
+        $primaryAuthor ??= $authors?->first();
+
+        if ($primaryAuthor) {
+            $email = $primaryAuthor->getData('email');
+            if ($email) {
+                $user = $this->getOrCreateAuthorUser(
+                    $primaryAuthor->getGivenName($this->_locale),
+                    $primaryAuthor->getFamilyName($this->_locale),
+                    $email,
+                    $authorGroupId
+                );
+                if ($user) {
+                    Repo::stageAssignment()->build($submissionId, $authorGroupId, $user->getId());
+                }
+            }
+        }
+
+        // Fallback: if no primary author with user, use config email (enables author responses)
+        $hasAuthorAssignment = StageAssignment::withSubmissionIds([$submissionId])
+            ->withRoleIds([Role::ROLE_ID_AUTHOR])
+            ->withStageIds([WORKFLOW_STAGE_ID_EXTERNAL_REVIEW])
+            ->exists();
+        if (!$hasAuthorAssignment) {
+            $fallbackUser = Repo::user()->getByEmail($config->getEmail(), true);
+            if ($fallbackUser) {
+                Repo::stageAssignment()->build($submissionId, $authorGroupId, $fallbackUser->getId());
+            }
+        }
+
+        // Assign editor to external review (for participant list, edit decisions)
+        $editorGroupIdForReview = $config->getEditorGroupIdForStage(WORKFLOW_STAGE_ID_EXTERNAL_REVIEW);
+        if ($editorGroupIdForReview) {
+            Repo::stageAssignment()->build($submissionId, $editorGroupIdForReview, $config->getEditor()->getId());
+        }
+    }
+
+    /**
      * Creates OJS reviews for each version based on the database query
      */
     public function createReviewsForVersions(Submission $submission): void
@@ -1339,6 +1413,9 @@ class OreImporter
         if (empty($reviews)) {
             return;
         }
+
+        // Ensure stage assignments for author, editor (and reviewer via ReviewAssignment) in external review
+        $this->assignStageAssignments($submission);
 
         // Delete all existing review assignments for this submission in external review stage
         // This ensures we can re-run the import and have a synchronized database
@@ -1720,6 +1797,47 @@ class OreImporter
         }
 
         return null;
+    }
+
+    /**
+     * Gets or creates an author user for stage assignments
+     *
+     * @param string|null $firstName
+     * @param string|null $lastName
+     * @param string|null $email
+     * @param int $authorGroupId
+     * @return User|null
+     */
+    private function getOrCreateAuthorUser(?string $firstName, ?string $lastName, ?string $email, int $authorGroupId): ?User
+    {
+        if (!$email) {
+            return null;
+        }
+
+        $user = Repo::user()->getByEmail($email, true);
+        if ($user) {
+            if (!Repo::userGroup()->userInGroup($user->getId(), $authorGroupId)) {
+                Repo::userGroup()->assignUserToGroup($user->getId(), $authorGroupId);
+            }
+            return $user;
+        }
+
+        $user = Repo::user()->newDataObject();
+        $user->setGivenName($firstName ?? '', $this->_locale);
+        $user->setFamilyName($lastName ?? '', $this->_locale);
+        $user->setEmail($email);
+        $user->setUsername($email);
+        $user->setDateRegistered(Core::getCurrentDate());
+        $user->setInlineHelp(1);
+        $user->setPassword(Validation::encryptCredentials($email, Str::random(16)));
+
+        $userId = Repo::user()->add($user);
+        if (!$userId) {
+            return null;
+        }
+
+        Repo::userGroup()->assignUserToGroup($userId, $authorGroupId);
+        return Repo::user()->get($userId);
     }
 
     /**
