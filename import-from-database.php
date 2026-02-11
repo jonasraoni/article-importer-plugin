@@ -10,12 +10,12 @@
 
 require_once __DIR__ . '/../../../tools/bootstrap.php';
 
+use APP\core\Application;
 use APP\core\PageRouter;
 use APP\facades\Repo;
 use APP\plugins\importexport\articleImporter\Configuration;
 use APP\plugins\importexport\articleImporter\OreImporter;
 use APP\submission\Submission;
-use Exception;
 use PKP\cliTool\CommandLineTool;
 use PKP\core\Registry;
 use PKP\plugins\Hook;
@@ -88,10 +88,6 @@ try {
         echo "Importing all articles with filters: " . json_encode($filters) . "\n";
         //OreImporter::importAllArticles($configuration, $connection, $filters);
         foreach (Repo::submission()->getCollector()->filterByStatus([Submission::STATUS_PUBLISHED])->filterByContextIds([$configuration->getContext()->getId()])->getMany() as $submission) {
-            if ($submission->getId() < 870) {
-                continue;
-            }
-
             $importer = new OreImporter($configuration, $connection, $submission->getId());
         }
     } elseif (isset($argv[5])) {

@@ -20,6 +20,7 @@ use APP\plugins\generic\funding\classes\Funder;
 use APP\plugins\generic\funding\classes\FunderAward;
 use APP\plugins\generic\funding\classes\FunderAwardDAO;
 use APP\plugins\generic\funding\classes\FunderDAO;
+use Exception;
 use PKP\db\DAORegistry;
 use PKP\db\DAOResultFactory;
 use PKP\plugins\PluginRegistry;
@@ -32,6 +33,19 @@ class Funders
     public static function isFundingPluginEnabled(int $contextId): bool
     {
         $fundingPlugin = PluginRegistry::getPlugin('generic', 'FundingPlugin') ?? PluginRegistry::loadPlugin('generic', 'funding');
+        try {
+            DAORegistry::getDAO('FunderDAO');
+        }
+        catch (Exception $e) {
+            DAORegistry::registerDAO('FunderDAO', new FunderDAO());
+        }
+        try {
+            DAORegistry::getDAO('FunderAwardDAO');
+        }
+        catch (Exception $e) {
+            DAORegistry::registerDAO('FunderAwardDAO', new FunderAwardDAO());
+        }
+
         return (bool) $fundingPlugin?->getEnabled($contextId);
     }
 

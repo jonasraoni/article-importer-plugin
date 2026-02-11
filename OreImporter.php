@@ -183,9 +183,9 @@ class OreImporter
      *
      * @return array|null Decoded JSON with articleId, numberOfViews, numberOfPdfDownloads, numberOfXmlDownloads, etc., or null on failure
      */
-    private function fetchOreMetrics(): ?array
+    private function fetchOreMetrics(int $articleId): ?array
     {
-        $url = 'https://open-research-europe.ec.europa.eu/api/metrics/total/F1000_RESEARCH/ARTICLE/' . (int) $this->_articleId;
+        $url = 'https://open-research-europe.ec.europa.eu/api/metrics/total/F1000_RESEARCH/ARTICLE/' . (int) $articleId;
         $context = stream_context_create([
             'http' => [
                 'timeout' => 10,
@@ -204,9 +204,9 @@ class OreImporter
      * Assign ORE API metrics to the submission, attributed to the latest version only (to avoid distorting totals).
      * Inserts into metrics_submission: article views, PDF galley views, XML galley views.
      */
-    private function assignOreMetricsToLatestVersion(array $publications): void
+    private function assignOreMetricsToLatestVersion(Publication $latestPublication, int $articleId): void
     {
-        $metrics = $this->fetchOreMetrics();
+        $metrics = $this->fetchOreMetrics($articleId);
         if (!$metrics) {
             return;
         }
@@ -218,16 +218,15 @@ class OreImporter
             return;
         }
 
-        $latestPublication = $publications[array_key_last($publications)];
         $submissionId = (int) $latestPublication->getData('submissionId');
         $contextId = $this->_contextId;
-        $loadId = 'ore_import_' . $this->_articleId . '_' . date('Ymd');
-        $date = date('Y-m-d');
+        $date = $latestPublication->getData('datePublished');
+        $loadId = 'ore_import_' . $articleId . '_' . $date;
 
         DB::table('metrics_submission')
             ->where('context_id', $contextId)
             ->where('submission_id', $submissionId)
-            ->where('load_id', 'like', 'ore_import_' . (int) $this->_articleId . '_%')
+            ->where('load_id', 'like', 'ore_import_' . (int) $articleId . '_%')
             ->delete();
 
         $pdfGalleyId = null;
@@ -1306,6 +1305,8 @@ class OreImporter
 
         $doiParts = explode('.', $doi);
         $articleId = array_slice($doiParts, -2, 1)[0];
+
+        $this->assignOreMetricsToLatestVersion($submission->getCurrentPublication(), (int) $articleId);
 
         // Execute the query to get all reviews
         $reviews = $this->_connection->table('f1000r_version as v')
