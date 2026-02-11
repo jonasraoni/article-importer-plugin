@@ -200,14 +200,12 @@ trait PublicationParser
             $label = $label ? "{$label}. " : '';
             $citationNode = $this->convertJatsToHtml($citation->getElementsByTagName('mixed-citation')->item(0));
             $citationText = $citationNode ? $citationNode->ownerDocument->saveXML($citationNode) : '';
-            $citationText = preg_replace(['/\r\n|\n\r|\r|\n/', '/\s{2,}/', '/\s+([,.])/'], [' ', ' ', '$1'], $citationText);
-            $citation->textContent = "{$label}{$citationText}\n";
             $document = new DOMDocument();
             $document->preserveWhiteSpace = false;
-            $document->loadXML($citation->C14N());
+            $document->loadXML("{$label}{$citationText}\n");
             $document->documentElement->normalize();
             if ($document->documentElement->textContent) {
-                $citations .= $document->documentElement->textContent . "\n";
+                $citations .= preg_replace(['/\r\n|\n\r|\r|\n/', '/\s{2,}/', '/\s+([,.])/'], [' ', ' ', '$1'], trim($document->documentElement->textContent)) . "\n";
             }
         }
         if ($citations) {
@@ -221,21 +219,28 @@ trait PublicationParser
      */
     private function _processFundingGroup(Publication $publication): void
     {
-        $any_set = false;
+        $values = [];
+        $locale = null;
         /** @var DOMElement $node */
         foreach ($this->select('front/article-meta/funding-group/funding-statement') as $node) {
-            $value = trim($this->getTextContent($node, fn ($n, $content) => $content));
+            $value = trim($this->getTextContent($node, function ($node, $content) {
+                // Transforms the known tags, the remaining ones will be stripped
+                $tag = [
+                    'title' => 'strong',
+                    'italic' => 'em',
+                    'sub' => 'sub',
+                    'sup' => 'sup',
+                    'p' => 'p'
+                ][$node->nodeName] ?? null;
+                return $tag ? "<{$tag}>{$content}</{$tag}>" : $content;
+            }));
             if ($value !== '') {
                 $locale = $this->getLocale($node->getAttribute('xml:lang'));
-                $publication->setData('fundingStatement', $value, $locale);
-                $any_set = true;
+                $values[] = "<p>{$value}</p>";
             }
         }
-        if (!$any_set) {
-            $stmt = $this->selectText('front/article-meta/funding-group/funding-statement');
-            if ($stmt !== '') {
-                $publication->setData('fundingStatement', $stmt, $this->getLocale());
-            }
+        if (count($values)) {
+            $publication->setData('fundingStatement', implode("\n", $values), $locale);
         }
     }
 
