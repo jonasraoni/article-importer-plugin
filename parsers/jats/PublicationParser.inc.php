@@ -179,14 +179,12 @@ trait PublicationParser
             $label = $label ? "{$label}. " : '';
             $citationNode = $this->convertJatsToHtml($citation->getElementsByTagName('mixed-citation')->item(0));
             $citationText = $citationNode ? $citationNode->ownerDocument->saveXML($citationNode) : '';
-            $citationText = preg_replace(['/\r\n|\n\r|\r|\n/', '/\s{2,}/', '/\s+([,.])/'], [' ', ' ', '$1'], $citationText);
-            $citation->textContent = "{$label}{$citationText}\n";
             $document = new DOMDocument();
             $document->preserveWhiteSpace = false;
-            $document->loadXML($citation->C14N());
+            $document->loadXML("<citation>{$label}{$citationText}</citation>");
             $document->documentElement->normalize();
             if ($document->documentElement->textContent) {
-                $citations .= $document->documentElement->textContent . "\n";
+                $citations .= preg_replace(['/\r\n|\n\r|\r|\n/', '/\s{2,}/', '/\s+([,.])/'], [' ', ' ', '$1'], trim($document->documentElement->textContent)) . "\n";
             }
         }
         if ($citations) {
