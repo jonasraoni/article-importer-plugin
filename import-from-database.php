@@ -87,8 +87,9 @@ try {
 
         echo "Importing all articles with filters: " . json_encode($filters) . "\n";
         //OreImporter::importAllArticles($configuration, $connection, $filters);
-        foreach (Repo::submission()->getCollector()->filterByStatus([Submission::STATUS_PUBLISHED])->filterByContextIds([$configuration->getContext()->getId()])->getMany() as $submission) {
+        foreach (Repo::submission()->getCollector()->filterByStatus([Submission::STATUS_PUBLISHED])->filterByContextIds([$configuration->getContext()->getId()])->orderBy(Repo::submission()->getCollector()::ORDERBY_ID)->getMany() as $submission) {
             $importer = new OreImporter($configuration, $connection, $submission->getId());
+            echo 'Processed ' . $submission->getId() . "\n";
         }
     } elseif (isset($argv[5])) {
         // Import specific article
