@@ -211,21 +211,28 @@ trait PublicationParser
      */
     private function _processFundingGroup(Publication $publication): void
     {
-        $anySet = false;
+        $values = [];
+        $locale = null;
         /** @var DOMElement $node */
         foreach ($this->select('front/article-meta/funding-group/funding-statement') as $node) {
-            $value = trim($this->getTextContent($node, fn ($n, $content) => $content));
+            $value = trim($this->getTextContent($node, function ($node, $content) {
+                // Transforms the known tags, the remaining ones will be stripped
+                $tag = [
+                    'title' => 'strong',
+                    'italic' => 'em',
+                    'sub' => 'sub',
+                    'sup' => 'sup',
+                    'p' => 'p'
+                ][$node->nodeName] ?? null;
+                return $tag ? "<{$tag}>{$content}</{$tag}>" : $content;
+            }));
             if ($value !== '') {
                 $locale = $this->getLocale($node->getAttribute('xml:lang'));
-                $publication->setData('fundingStatement', $value, $locale);
-                $anySet = true;
+                $values[] = "<p>{$value}</p>";
             }
         }
-        if (!$anySet) {
-            $statement = $this->selectText('front/article-meta/funding-group/funding-statement');
-            if ($statement !== '') {
-                $publication->setData('fundingStatement', $statement, $this->getLocale());
-            }
+        if (count($values)) {
+            $publication->setData('fundingStatement', implode("\n", $values), $locale);
         }
     }
 
