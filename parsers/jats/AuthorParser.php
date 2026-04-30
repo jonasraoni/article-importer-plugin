@@ -152,23 +152,30 @@ trait AuthorParser
 
     private function getCreditRole(?string $role): ?string
     {
-        $roles = [
-            'https://credit.niso.org/contributor-roles/conceptualization/' => 'conceptualization',
-            'https://credit.niso.org/contributor-roles/data-curation/' => 'data curation',
-            'https://credit.niso.org/contributor-roles/formal-analysis/' => 'formal analysis',
-            'https://credit.niso.org/contributor-roles/funding-acquisition/' => 'funding acquisition',
-            'https://credit.niso.org/contributor-roles/investigation/' => 'investigation',
-            'https://credit.niso.org/contributor-roles/methodology/' => 'methodology',
-            'https://credit.niso.org/contributor-roles/project-administration/' => 'project administration',
-            'https://credit.niso.org/contributor-roles/resources/' => 'resources',
-            'https://credit.niso.org/contributor-roles/software/' => 'software',
-            'https://credit.niso.org/contributor-roles/supervision/' => 'supervision',
-            'https://credit.niso.org/contributor-roles/validation/' => 'validation',
-            'https://credit.niso.org/contributor-roles/visualization/' => 'visualization',
-            'https://credit.niso.org/contributor-roles/writing-original-draft/' => 'writing – original draft',
-            'https://credit.niso.org/contributor-roles/writing-original-draft/' => 'writing – original draft preparation',
-            'https://credit.niso.org/contributor-roles/writing-review-editing/' => 'writing – review & editing'
-        ];
-        return array_key_exists($role = strtolower($role), $roles) ? $role : (array_search($role, $roles) ?: null);
+        static $roles;
+        if (!$roles) {
+            $roles = [
+                'conceptualization' => 'credit.niso.org/contributor-roles/conceptualization',
+                'data curation' => 'credit.niso.org/contributor-roles/data-curation',
+                'formal analysis' => 'credit.niso.org/contributor-roles/formal-analysis',
+                'funding acquisition' => 'credit.niso.org/contributor-roles/funding-acquisition',
+                'investigation' => 'credit.niso.org/contributor-roles/investigation',
+                'methodology' => 'credit.niso.org/contributor-roles/methodology',
+                'project administration' => 'credit.niso.org/contributor-roles/project-administration',
+                'resources' => 'credit.niso.org/contributor-roles/resources',
+                'software' => 'credit.niso.org/contributor-roles/software',
+                'supervision' => 'credit.niso.org/contributor-roles/supervision',
+                'validation' => 'credit.niso.org/contributor-roles/validation',
+                'visualization' => 'credit.niso.org/contributor-roles/visualization',
+                'writing – original draft' => 'credit.niso.org/contributor-roles/writing-original-draft',
+                'writing – original draft preparation' => 'credit.niso.org/contributor-roles/writing-original-draft',
+                'writing – review & editing' => 'credit.niso.org/contributor-roles/writing-review-editing',
+            ];
+            $roles += array_combine($roles, $roles);
+        }
+        $role = mb_strtolower($role ?? '');
+        // Drop http prefix and trailing slash
+        $role = preg_replace('#https?://|/$#', '', $role);
+        return array_key_exists($role, $roles) ? "https://{$roles[$role]}/" : null;
     }
 }
