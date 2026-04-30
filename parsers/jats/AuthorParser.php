@@ -135,7 +135,7 @@ trait AuthorParser
         $author->setData('primaryContact', !$this->_authorCount);
         $author->setData('userGroupId', $this->getConfiguration()->getAuthorGroupId());
         $author->setData('creditRoles', $creditRoles);
-
+        $author->setContributorRoles([$this->getCachedContributorRole($this->selectText('contrib-type', $authorNode))]);
         Repo::author()->add($author);
         ++$this->_authorCount;
         return $author;

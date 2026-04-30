@@ -18,6 +18,7 @@ use APP\facades\Repo;
 use APP\issue\Issue;
 use APP\section\Section;
 use APP\submission\Submission;
+use PKP\author\contributorRole\ContributorRole;
 use PKP\category\Category;
 use PKP\db\DAORegistry;
 use PKP\submission\Genre;
@@ -172,5 +173,13 @@ trait EntityManager
     protected function setCachedCategory(string $name, ?Category $category): void
     {
         static::$cache['category'][$name] = $category;
+    }
+
+    /**
+     * Get cached contributor role
+     */
+    protected function getCachedContributorRole(string $name): ?ContributorRole
+    {
+        return static::$cache['contributorRole'][$name] ?? ContributorRole::where('contributor_role_identifier', $name)->first();
     }
 }
