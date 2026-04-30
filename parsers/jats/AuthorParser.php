@@ -28,14 +28,22 @@ trait AuthorParser
      */
     private function _processAuthors(Publication $publication): void
     {
-        $firstAuthor = null;
+        $firstAuthor = $firstCorrespYesAuthor = $firstCorrespNotNoAuthor = null;
         foreach ($this->select("front/article-meta/contrib-group[@content-type='authors']/contrib|front/article-meta/contrib-group/contrib[@contrib-type='author']") as $node) {
             $author = $this->_processAuthor($publication, $node);
-            $firstAuthor ?? $firstAuthor = $author;
+            $firstAuthor ??= $author;
+            $corresp = mb_strtolower(trim($node->getAttribute('corresp') ?? ''));
+            if ($corresp === 'yes') {
+                $firstCorrespYesAuthor ??= $author;
+            }
+            if ($corresp !== 'no') {
+                $firstCorrespNotNoAuthor ??= $author;
+            }
         }
         // If there's no authors, create a default author
-        $firstAuthor ?? $firstAuthor = $this->_createDefaultAuthor($publication);
-        $publication->setData('primaryContactId', $firstAuthor->getId());
+        $firstAuthor ??= $this->_createDefaultAuthor($publication);
+        $primaryContactAuthor = $firstCorrespYesAuthor ?? $firstCorrespNotNoAuthor ?? $firstAuthor;
+        $publication->setData('primaryContactId', $primaryContactAuthor->getId());
     }
 
     /**
