@@ -57,11 +57,12 @@ trait AuthorParser
         $lastName = $this->selectText('surname', $node);
         $prefix = $this->selectText('prefix', $node);
         $suffix = $this->selectText('suffix', $node);
+        $collab = $this->selectFirst('collab', $authorNode);
         if ($lastName && !$firstName) {
             $firstName = $lastName;
             $lastName = '';
         } elseif (!$lastName && !$firstName) {
-            $firstName = $this->getConfiguration()->getContext()->getName($this->getLocale());
+            $firstName = $collab ?: $this->getConfiguration()->getContext()->getName($this->getLocale());
         }
         $firstName = ($prefix ? "{$prefix} " : '') . $firstName;
         $lastName = $lastName . ($suffix ? " {$suffix}" : '');
