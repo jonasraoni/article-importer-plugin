@@ -202,7 +202,7 @@ trait PublicationParser
             $citationText = $citationNode ? $citationNode->ownerDocument->saveXML($citationNode) : '';
             $document = new DOMDocument();
             $document->preserveWhiteSpace = false;
-            $document->loadXML("{$label}{$citationText}\n");
+            $document->loadXML("<citation>{$label}{$citationText}</citation>");
             $document->documentElement->normalize();
             if ($document->documentElement->textContent) {
                 $citations .= preg_replace(['/\r\n|\n\r|\r|\n/', '/\s{2,}/', '/\s+([,.])/'], [' ', ' ', '$1'], trim($document->documentElement->textContent)) . "\n";
