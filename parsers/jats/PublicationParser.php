@@ -66,6 +66,10 @@ trait PublicationParser
             $publication->setData('pages', "{$firstPage}" . ($lastPage ? "-{$lastPage}" : ''));
         }
 
+        if ($elocationId = $this->selectText('front/article-meta/elocation-id')) {
+            $publication->setData('articleNumber', $elocationId);
+        }
+
         $hasTitle = false;
 
         // Set title
