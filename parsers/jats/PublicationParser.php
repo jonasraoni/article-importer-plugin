@@ -126,6 +126,9 @@ trait PublicationParser
                 return $tag ? "<{$tag}>{$content}</{$tag}>" : $content;
             }));
             if ($value) {
+                if (($node->getAttribute('abstract-type') ?? '') === 'plain-language-summary') {
+                    $value = str_replace('<strong>Plain language summary</strong>', '', $value);
+                }
                 $publication->setData(strtolower($node->getAttribute('abstract-type') ?? '') === 'plain-language-summary' ? 'plainLanguageSummary' : 'abstract', $value, $this->getLocale($node->getAttribute('xml:lang')));
             }
         }
