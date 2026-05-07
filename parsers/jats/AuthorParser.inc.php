@@ -81,7 +81,11 @@ trait AuthorParser
             $id = $node->getAttribute('rid');
             switch ($node->getAttribute('ref-type')) {
                 case 'aff':
-                    $affiliation = $this->selectText("../aff[@id='{$id}']//institution", $authorNode) ?: $this->selectText("front/article-meta/aff[@id='{$id}']//institution");
+                    $affiliationNode = $this->selectFirst("../aff[@id='{$id}']", $authorNode) ?: $this->selectFirst("front/article-meta/aff[@id='{$id}']");
+                    if (!$affiliationNode) {
+                        break;
+                    }
+                    $affiliation = $this->selectText(".//institution", $affiliationNode) ?: $this->selectText(".", $affiliationNode);
                     if ($affiliation) {
                         $affiliations[] = $affiliation;
                     }
