@@ -132,6 +132,10 @@ trait AuthorParser
             $author->setData('orcid', $orcid);
         }
 
+        if ($competingInterests = $this->selectText('front/article-meta/author-notes/fn[@fn-type="conflict"]')) {
+            $author->setData('competingInterests', $competingInterests, $this->getLocale());
+        }
+
         $author->setData('email', $email);
         $author->setData('affiliation', implode('; ', $affiliations), $this->getLocale());
         $author->setData('biography', $biography, $this->getLocale());
