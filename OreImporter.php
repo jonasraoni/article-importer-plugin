@@ -282,7 +282,7 @@ class OreImporter
                 'representation_id' => $xmlGalleyId ?: null,
                 'submission_file_id' => $xmlSubmissionFileId ?: null,
                 'file_type' => PKPStatisticsHelper::STATISTICS_FILE_TYPE_OTHER,
-                'assoc_type' => Application::ASSOC_TYPE_SUBMISSION_FILE,
+                'assoc_type' => Application::ASSOC_TYPE_JATS,
                 'metric' => $xmlDownloads,
             ]));
         }
