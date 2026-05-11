@@ -1403,7 +1403,8 @@ class OreImporter
                 'r.decision',
                 'v.id as version_id',
                 'r.id as review_id',
-                'v.version_number'
+                'v.version_number',
+                'r.doi'
             ])
             ->orderBy('v.id')
             ->orderBy('r.id')
@@ -1545,6 +1546,7 @@ class OreImporter
                             'dateConfirmed' => Core::getCurrentDate(),
                             'dateAcknowledged' => Core::getCurrentDate(),
                             'isReviewPubliclyVisible' => 1,
+                            'doiId' => $review_record->doi
                         ]);
                         $review_assignment = $existing_assignment;
                     } else {
@@ -1565,6 +1567,7 @@ class OreImporter
                             'reviewerRecommendationId' => $reviewer_recommendation_id,
                             'reviewMethod' => ReviewAssignment::SUBMISSION_REVIEW_METHOD_OPEN,
                             'isReviewPubliclyVisible' => 1,
+                            'doiId' => $review_record->doi
                         ]);
 
                         $review_assignment_id = Repo::reviewAssignment()->add($review_assignment);
