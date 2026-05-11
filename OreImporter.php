@@ -139,6 +139,25 @@ class OreImporter
                 error_log("Failed to import article {$articleId}: " . $e->getMessage());
             }
         }
+        $orcids = $connection->table('orcid_access_data')->get();
+        foreach ($orcids as $orcid) {
+            $authorIds = DB::table('author_settings')->where('setting_name', 'orcid')
+                ->where('setting_value', 'https://orcid.org' . $orcid->orcid)
+                ->get()
+                ->pluck('author_id')
+                ->toArray();
+            foreach ($authorIds as $authorId) {
+                DB::table('author_settings')
+                    ->where('author_id', $authorId)
+                    ->update([
+                        'orcidIsVerified' => 1,
+                        'orcidAccessToken' => $orcid->access_token,
+                        'orcidAccessScope' => $orcid->access_scope,
+                        'orcidRefreshToken' => $orcid->refresh_token,
+                        'orcidAccessExpiresOn' => $orcid->expires_in,
+                    ]);
+            }
+        }
     }
 
     /**
