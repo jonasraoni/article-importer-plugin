@@ -93,7 +93,7 @@ trait AuthorParser
                     if (!$affiliationNode) {
                         break;
                     }
-                    $affiliation = $this->selectText(".//institution", $affiliationNode) ?: $this->selectText(".", $affiliationNode);
+                    $affiliations[] = $this->selectText(".//institution", $affiliationNode) ?: $this->selectText(".", $affiliationNode);
                     break;
                 case 'corresp':
                     $email = $email ?: $this->selectText("front/article-meta/author-notes/corresp[@id='{$id}']//email");
@@ -138,7 +138,7 @@ trait AuthorParser
             $author->setData('orcid', $orcid);
         }
 
-        if ($competingInterests = $this->selectText('../../author-notes/fn[@fn-type="conflict"]', $authorNode)) {
+        if ($competingInterests = $this->selectText('front/article-meta/author-notes/fn[@fn-type="conflict"]')) {
             $author->setData('competingInterests', $competingInterests, $this->getLocale());
         }
 
