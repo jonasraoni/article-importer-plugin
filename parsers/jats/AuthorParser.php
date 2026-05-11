@@ -93,6 +93,10 @@ trait AuthorParser
                     if (!$affiliationNode) {
                         break;
                     }
+                    $labels = $affiliationNode->getElementsByTagName('label');
+                    foreach ($labels as $label) {
+                        $label->parentNode->removeChild($label);
+                    }
                     $affiliations[] = $this->selectText(".//institution", $affiliationNode) ?: $this->selectText(".", $affiliationNode);
                     break;
                 case 'corresp':
