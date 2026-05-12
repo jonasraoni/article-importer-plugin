@@ -1328,7 +1328,7 @@ class OreImporter
         // Assign primary author only
         $publication = $submission->getCurrentPublication();
         $authors = $publication->getData('authors');
-        $primaryAuthor = $authors ? $authors->first(fn ($a) => $a->getData('primaryContact')) : null;
+        $primaryAuthor = $authors ? $authors->first(fn ($a) => $publication->getData('primaryContactId') === $a->getId()) : null;
         $primaryAuthor ??= $authors?->first();
 
         if ($primaryAuthor) {
@@ -1534,8 +1534,8 @@ class OreImporter
 
                     $reviewer_recommendation_id = $this->getReviewerRecommendationIdForDecision($review_record->decision ?? null);
 
-                    $doi = Repo::doi()->getCollector()->filterByIdentifier($review_record->doi)->getMany()->first();
-                    if (!$doi) {
+                    $doi = $review_record->doi ? Repo::doi()->getCollector()->filterByIdentifier($review_record->doi)->getMany()->first() : null;
+                    if (!$doi && $review_record->doi) {
                         $doi = Repo::doi()->newDataObject([
                             'doi' => $review_record->doi,
                             'contextId' => $this->_configuration->getContext()->getId()
@@ -1555,7 +1555,7 @@ class OreImporter
                             'dateConfirmed' => Core::getCurrentDate(),
                             'dateAcknowledged' => Core::getCurrentDate(),
                             'isReviewPubliclyVisible' => 1,
-                            'doiId' => $doi->getId()
+                            'doiId' => $doi?->getId()
                         ]);
                         $review_assignment = $existing_assignment;
                     } else {
@@ -1576,7 +1576,7 @@ class OreImporter
                             'reviewerRecommendationId' => $reviewer_recommendation_id,
                             'reviewMethod' => ReviewAssignment::SUBMISSION_REVIEW_METHOD_OPEN,
                             'isReviewPubliclyVisible' => 1,
-                            'doiId' => $doi->getId()
+                            'doiId' => $doi?->getId()
                         ]);
 
                         $review_assignment_id = Repo::reviewAssignment()->add($review_assignment);

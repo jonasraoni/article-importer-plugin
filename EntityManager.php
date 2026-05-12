@@ -21,6 +21,7 @@ use APP\submission\Submission;
 use PKP\author\contributorRole\ContributorRole;
 use PKP\category\Category;
 use PKP\db\DAORegistry;
+use PKP\ror\Ror;
 use PKP\submission\Genre;
 use PKP\submission\GenreDAO;
 use Throwable;
@@ -106,7 +107,7 @@ trait EntityManager
     /**
      * Set cached section
      */
-    protected function setCachedSection(string $name, Section $section): void
+    protected function setCachedSection(string $name, Section $section, Issue $issue): void
     {
         static::$cache['section'][$name] = $section;
 
@@ -115,8 +116,8 @@ trait EntityManager
         }
 
         // Includes a section into the issue custom order
-        if (!Repo::section()->getCustomSectionOrder($this->buildIssue()->getId(), $section->getId())) {
-            Repo::section()->upsertCustomSectionOrder($this->buildIssue()->getId(), $section->getId(), count(static::$cache['section']));
+        if (!Repo::section()->getCustomSectionOrder($issue->getId(), $section->getId())) {
+            Repo::section()->upsertCustomSectionOrder($issue->getId(), $section->getId(), count(static::$cache['section']));
         }
     }
 
@@ -181,5 +182,13 @@ trait EntityManager
     protected function getCachedContributorRole(string $name): ?ContributorRole
     {
         return static::$cache['contributorRole'][$name] ?? ContributorRole::where('contributor_role_identifier', $name)->first();
+    }
+
+    /**
+     * Get cached ROR
+     */
+    protected function getCachedROR(string $name): ?Ror
+    {
+        return static::$cache['ror'][$name] ?? Repo::ror()->getCollector()->filterByName($name)->getMany()->first();
     }
 }

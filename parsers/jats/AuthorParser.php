@@ -59,7 +59,7 @@ trait AuthorParser
         $lastName = $this->selectText('surname', $node);
         $prefix = $this->selectText('prefix', $node);
         $suffix = $this->selectText('suffix', $node);
-        $collab = $this->selectFirst('collab', $authorNode);
+        $collab = $this->selectText('collab', $authorNode);
         if ($lastName && !$firstName) {
             $firstName = $lastName;
             $lastName = '';
@@ -147,7 +147,6 @@ trait AuthorParser
         }
 
         $author->setData('email', $email);
-        $author->setData('affiliation', implode('; ', $affiliations), $this->getLocale());
         $author->setData('biography', $biography, $this->getLocale());
         $author->setData('seq', $this->_authorCount + 1);
         $author->setData('publicationId', $publication->getId());
@@ -158,7 +157,23 @@ trait AuthorParser
         if ($contributorRoles = $this->getCachedContributorRole($this->selectText('@contrib-type', $authorNode))) {
             $author->setContributorRoles([$contributorRoles]);
         }
-        Repo::author()->add($author);
+        $authorId = Repo::author()->add($author);
+        $author = Repo::author()->get($authorId);
+
+        $affiliationObjects = [];
+        foreach ($affiliations as $name) {
+            $affiliation = Repo::affiliation()->newDataObject(['authorId' => $author->getId()]);
+            $ror = $this->getCachedROR($name);
+            if ($ror) {
+                $affiliation->setRor($ror->getRor());
+            } else {
+                $affiliation->setName($name, $this->getLocale());
+            }
+            $affiliationObjects[] = $affiliation;
+        }
+        $author->setAffiliations($affiliationObjects);
+        Repo::author()->edit($author);
+
         ++$this->_authorCount;
         return $author;
     }

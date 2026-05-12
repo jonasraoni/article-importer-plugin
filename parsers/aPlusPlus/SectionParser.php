@@ -64,7 +64,7 @@ trait SectionParser
         $section->setData('hideAuthor', false);
         Repo::section()->add($section);
         $this->trackEntity($section);
-        $this->setCachedSection($sectionName, $section);
+        $this->setCachedSection($sectionName, $section, $this->getIssue());
         return $this->_section = $section;
     }
 }

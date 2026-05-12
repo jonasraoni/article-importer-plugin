@@ -131,7 +131,7 @@ trait PublicationParser
             }));
             if ($value) {
                 if (($node->getAttribute('abstract-type') ?? '') === 'plain-language-summary') {
-                    $value = str_replace('<strong>Plain language summary</strong>', '', $value);
+                    $value = str_ireplace('<strong>Plain language summary</strong>', '', $value);
                 }
                 $publication->setData(strtolower($node->getAttribute('abstract-type') ?? '') === 'plain-language-summary' ? 'plainLanguageSummary' : 'abstract', $value, $this->getLocale($node->getAttribute('xml:lang')));
             }
@@ -157,10 +157,18 @@ trait PublicationParser
         }
 
         // Set copyright year and holder and license permissions
-        $publication->setData('copyrightHolder', $this->selectText('front/article-meta/permissions/copyright-holder'), $this->getLocale());
-        $publication->setData('copyrightNotice', $this->selectText('front/article-meta/permissions/copyright-statement'), $this->getLocale());
-        $publication->setData('copyrightYear', $this->selectText('front/article-meta/permissions/copyright-year') ?: $publicationDate->format('Y'));
-        $publication->setData('licenseUrl', $this->selectText('front/article-meta/permissions/license/attribute::xlink:href'));
+        if ($copyrightHolder = $this->selectText('front/article-meta/permissions/copyright-holder')) {
+            $publication->setData('copyrightHolder', $copyrightHolder, $this->getLocale());
+        }
+        if ($copyrightNotice = $this->selectText('front/article-meta/permissions/copyright-statement')) {
+            $publication->setData('copyrightNotice', $copyrightNotice, $this->getLocale());
+        }
+        if ($copyrightYear = $this->selectText('front/article-meta/permissions/copyright-year')) {
+            $publication->setData('copyrightYear', $copyrightYear);
+        }
+        if ($licenseUrl = $this->selectText('front/article-meta/permissions/license/attribute::xlink:href')) {
+            $publication->setData('licenseUrl', $licenseUrl);
+        }
 
         $this->_processFundingGroup($publication);
 
@@ -602,10 +610,6 @@ trait PublicationParser
      */
     private function _processCategories(Publication $publication): void
     {
-        if (!$this->getConfiguration()->useCategoryAsSection()) {
-            return;
-        }
-
         $categoryIds = [];
         /** @var DOMElement $node */
         foreach ($this->select('front/article-meta/article-categories/subj-group') as $node) {
