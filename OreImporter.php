@@ -1628,15 +1628,15 @@ class OreImporter
                 }
 
                 // Create an edit decision if we have a valid decision value
-                if ($decision_value !== null) {
+                //if ($decision_value !== null) {
                     $this->createEditDecision(
                         $submission,
                         $publication,
                         $review_round,
-                        $decision_value,
+                        Decision::ACCEPT,
                         $review_record->published_date
                     );
-                }
+                //}
             }
 
             // Import author responses: approved comments linked to reports in this round
