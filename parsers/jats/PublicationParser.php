@@ -77,6 +77,10 @@ trait PublicationParser
             $publication->setData('pages', "{$firstPage}" . ($lastPage ? "-{$lastPage}" : ''));
         }
 
+        if ($elocationId = $this->selectText('front/article-meta/elocation-id')) {
+            $publication->setData('articleNumber', $elocationId);
+        }
+
         $hasTitle = false;
 
         // Set title
@@ -178,7 +182,7 @@ trait PublicationParser
         $this->_insertPDFGalley($publication);
 
         // Store the JATS XML
-        $this->_insertXMLSubmissionFile();
+        $this->_insertXMLSubmissionFile($publication);
         // Process full text and generate HTML files
         $this->_processFullText(false);
         $this->_insertHTMLGalley($publication);
@@ -284,7 +288,7 @@ trait PublicationParser
     /**
      * Inserts the XML as a JATS file
      */
-    private function _insertXMLSubmissionFile(): void
+    private function _insertXMLSubmissionFile(Publication $publication): void
     {
         $file = $this->getArticleVersion()->getMetadataFile();
         $filename = $file->getPathname();
@@ -313,6 +317,8 @@ trait PublicationParser
         $newSubmissionFile->setData('createdAt', Core::getCurrentDate());
         $newSubmissionFile->setData('updatedAt', Core::getCurrentDate());
         $newSubmissionFile->setData('name', $file->getFilename(), $this->getLocale());
+        $newSubmissionFile->setData('assocType', Application::ASSOC_TYPE_PUBLICATION);
+        $newSubmissionFile->setData('assocId', $publication->getId());
 
         $submissionFileId = Repo::submissionFile()->add($newSubmissionFile);
 

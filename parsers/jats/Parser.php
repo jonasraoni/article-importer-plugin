@@ -217,7 +217,9 @@ class Parser extends BaseParser
                 foreach (iterator_to_array($current->childNodes) as $child) {
                     $new->appendChild($child);
                 }
-                $current->parentNode->replaceChild($new, $current);
+                if ($current->parentNode) {
+                    $current->parentNode->replaceChild($new, $current);
+                }
             }
         }
 

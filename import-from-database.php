@@ -16,6 +16,7 @@ use APP\facades\Repo;
 use APP\plugins\importexport\articleImporter\Configuration;
 use APP\plugins\importexport\articleImporter\OreImporter;
 use APP\submission\Submission;
+use Illuminate\Support\Facades\DB;
 use PKP\cliTool\CommandLineTool;
 use PKP\core\Registry;
 use PKP\plugins\Hook;
@@ -90,6 +91,32 @@ try {
         foreach (Repo::submission()->getCollector()->filterByStatus([Submission::STATUS_PUBLISHED])->filterByContextIds([$configuration->getContext()->getId()])->orderBy(Repo::submission()->getCollector()::ORDERBY_ID)->getMany() as $submission) {
             $importer = new OreImporter($configuration, $connection, $submission->getId());
             echo 'Processed ' . $submission->getId() . "\n";
+        }
+
+        $orcids = $connection->table('orcid_access_data')
+            ->selectRaw('DISTINCT ON (orcid) *')
+            ->orderBy('orcid')
+            ->orderByDesc('created_on')
+            ->get();
+        foreach ($orcids as $orcid) {
+            $authorIds = DB::table('author_settings')->where('setting_name', 'orcid')
+                ->where('setting_value', 'https://orcid.org/' . $orcid->orcid)
+                ->get()
+                ->pluck('author_id')
+                ->toArray();
+            $rows = [];
+            foreach ($authorIds as $authorId) {
+                $rows[] = ['author_id' => $authorId, 'setting_name' => 'orcidIsVerified', 'setting_value' => '1'];
+                $rows[] = ['author_id' => $authorId, 'setting_name' => 'orcidAccessToken', 'setting_value' => (string) $orcid->access_token];
+                $rows[] = ['author_id' => $authorId, 'setting_name' => 'orcidAccessScope', 'setting_value' => (string) $orcid->access_scope];
+                $rows[] = ['author_id' => $authorId, 'setting_name' => 'orcidRefreshToken', 'setting_value' => (string) $orcid->refresh_token];
+                $rows[] = ['author_id' => $authorId, 'setting_name' => 'orcidAccessExpiresOn', 'setting_value' => (string) $orcid->expires_in];
+            }
+            DB::table('author_settings')->upsert(
+                $rows,
+                ['author_id', 'setting_name'],
+                ['setting_value']
+            );
         }
     } elseif (isset($argv[5])) {
         // Import specific article

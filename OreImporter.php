@@ -139,25 +139,6 @@ class OreImporter
                 error_log("Failed to import article {$articleId}: " . $e->getMessage());
             }
         }
-        $orcids = $connection->table('orcid_access_data')->get();
-        foreach ($orcids as $orcid) {
-            $authorIds = DB::table('author_settings')->where('setting_name', 'orcid')
-                ->where('setting_value', 'https://orcid.org' . $orcid->orcid)
-                ->get()
-                ->pluck('author_id')
-                ->toArray();
-            foreach ($authorIds as $authorId) {
-                DB::table('author_settings')
-                    ->where('author_id', $authorId)
-                    ->update([
-                        'orcidIsVerified' => 1,
-                        'orcidAccessToken' => $orcid->access_token,
-                        'orcidAccessScope' => $orcid->access_scope,
-                        'orcidRefreshToken' => $orcid->refresh_token,
-                        'orcidAccessExpiresOn' => $orcid->expires_in,
-                    ]);
-            }
-        }
     }
 
     /**
@@ -1553,6 +1534,15 @@ class OreImporter
 
                     $reviewer_recommendation_id = $this->getReviewerRecommendationIdForDecision($review_record->decision ?? null);
 
+                    $doi = Repo::doi()->getCollector()->filterByIdentifier($review_record->doi)->getMany()->first();
+                    if (!$doi) {
+                        $doi = Repo::doi()->newDataObject([
+                            'doi' => $review_record->doi,
+                            'contextId' => $this->_configuration->getContext()->getId()
+                        ]);
+                        Repo::doi()->add($doi);
+                        $doi = Repo::doi()->get($doi->getId());
+                    }
                     if ($existing_assignment) {
                         // Update existing assignment
                         Repo::reviewAssignment()->edit($existing_assignment, [
@@ -1565,7 +1555,7 @@ class OreImporter
                             'dateConfirmed' => Core::getCurrentDate(),
                             'dateAcknowledged' => Core::getCurrentDate(),
                             'isReviewPubliclyVisible' => 1,
-                            'doiId' => $review_record->doi
+                            'doiId' => $doi->getId()
                         ]);
                         $review_assignment = $existing_assignment;
                     } else {
@@ -1586,7 +1576,7 @@ class OreImporter
                             'reviewerRecommendationId' => $reviewer_recommendation_id,
                             'reviewMethod' => ReviewAssignment::SUBMISSION_REVIEW_METHOD_OPEN,
                             'isReviewPubliclyVisible' => 1,
-                            'doiId' => $review_record->doi
+                            'doiId' => $doi->getId()
                         ]);
 
                         $review_assignment_id = Repo::reviewAssignment()->add($review_assignment);
