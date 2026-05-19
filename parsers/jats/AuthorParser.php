@@ -131,7 +131,6 @@ trait AuthorParser
         }
 
         $author->setData('email', $email);
-        $author->setData('affiliation', implode('; ', $affiliations), $this->getLocale());
         $author->setData('biography', $biography, $this->getLocale());
         $author->setData('seq', $this->_authorCount + 1);
         $author->setData('publicationId', $publication->getId());
@@ -139,8 +138,21 @@ trait AuthorParser
         $author->setData('primaryContact', !$this->_authorCount);
         $author->setData('userGroupId', $this->getConfiguration()->getAuthorGroupId());
         $author->setData('creditRoles', $creditRoles);
-
-        Repo::author()->add($author);
+        $authorId = Repo::author()->add($author);
+        $author = Repo::author()->get($authorId);
+        $affiliationObjects = [];
+        foreach ($affiliations as $name) {
+            $affiliation = Repo::affiliation()->newDataObject(['authorId' => $author->getId()]);
+            $ror = $this->getCachedROR($name);
+            if ($ror) {
+                $affiliation->setRor($ror->getRor());
+            } else {
+                $affiliation->setName($name, $this->getLocale());
+            }
+            $affiliationObjects[] = $affiliation;
+        }
+        $author->setAffiliations($affiliationObjects);
+        Repo::author()->edit($author);
         ++$this->_authorCount;
         return $author;
     }

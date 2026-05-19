@@ -20,6 +20,7 @@ use APP\section\Section;
 use APP\submission\Submission;
 use PKP\category\Category;
 use PKP\db\DAORegistry;
+use PKP\ror\Ror;
 use PKP\submission\Genre;
 use PKP\submission\GenreDAO;
 use Throwable;
@@ -172,5 +173,13 @@ trait EntityManager
     protected function setCachedCategory(string $name, ?Category $category): void
     {
         static::$cache['category'][$name] = $category;
+    }
+
+    /**
+     * Get cached ROR
+     */
+    protected function getCachedROR(string $name): ?Ror
+    {
+        return static::$cache['ror'][$name] ?? Repo::ror()->getCollector()->filterByName($name)->getMany()->first();
     }
 }
