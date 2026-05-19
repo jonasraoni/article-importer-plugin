@@ -132,11 +132,18 @@ trait PublicationParser
         }
 
         // Set copyright year and holder and license permissions
-        $publication->setData('copyrightHolder', $this->selectText('front/article-meta/permissions/copyright-holder'), $this->getLocale());
-        $publication->setData('copyrightNotice', $this->selectText('front/article-meta/permissions/copyright-statement'), $this->getLocale());
-        $publication->setData('copyrightYear', $this->selectText('front/article-meta/permissions/copyright-year') ?: $publicationDate->format('Y'));
-        $publication->setData('licenseUrl', $this->selectText('front/article-meta/permissions/license/attribute::xlink:href'));
-
+        if ($copyrightHolder = $this->selectText('front/article-meta/permissions/copyright-holder')) {
+            $publication->setData('copyrightHolder', $copyrightHolder, $this->getLocale());
+        }
+        if ($copyrightNotice = $this->selectText('front/article-meta/permissions/copyright-statement')) {
+            $publication->setData('copyrightNotice', $copyrightNotice, $this->getLocale());
+        }
+        if ($copyrightYear = $this->selectText('front/article-meta/permissions/copyright-year')) {
+            $publication->setData('copyrightYear', $copyrightYear);
+        }
+        if ($licenseUrl = $this->selectText('front/article-meta/permissions/license/attribute::xlink:href')) {
+            $publication->setData('licenseUrl', $licenseUrl);
+        }
         $publication = $this->_processCitations($publication);
         $this->setPublicationCoverImage($publication);
         $this->_processCategories($publication);
