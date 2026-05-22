@@ -171,6 +171,7 @@ trait PublicationParser
         }
 
         $this->_processFundingGroup($publication);
+        $this->_processDataAvailability($publication);
 
         $publication = $this->_processCitations($publication);
         $this->setPublicationCoverImage($publication);
@@ -256,6 +257,36 @@ trait PublicationParser
         }
         if (count($values)) {
             $publication->setData('fundingStatement', implode("\n", $values), $locale);
+        }
+    }
+
+    /**
+     * Parse data-availability sections: set dataAvailability on publication (localized).
+     */
+    private function _processDataAvailability(Publication $publication): void
+    {
+        $secs = iterator_to_array($this->select("//sec[contains(concat(' ', normalize-space(@sec-type), ' '), ' data-availability ')]"));
+        if (!$secs) {
+            $secs = iterator_to_array($this->select("//sec[./title[translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz')='data availability' or starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'data availability ')]]"));
+        }
+
+        /** @var DOMElement $sec */
+        foreach ($secs as $sec) {
+            $node = $sec->cloneNode(true);
+            foreach (iterator_to_array($node->childNodes) as $child) {
+                if ($child instanceof DOMElement && $child->tagName === 'title') {
+                    $node->removeChild($child);
+                }
+            }
+            static::convertJatsToHtml($node);
+            $fragment = $node->ownerDocument->createDocumentFragment();
+            foreach (iterator_to_array($node->childNodes) as $childNode) {
+                $fragment->appendChild($childNode);
+            }
+            $value = trim($node->ownerDocument->saveHTML($fragment));
+            if ($value !== '') {
+                $publication->setData('dataAvailability', $value, $this->getLocale($sec->getAttribute('xml:lang')));
+            }
         }
     }
 
