@@ -118,6 +118,12 @@ class Parser extends BaseParser
                     $new = $document->createElement('span');
                     $new->setAttribute('style', 'font-family: monospace');
                     break;
+                case 'xref':
+                    $new = $document->createElement('a');
+                    if ($rid = $current->getAttribute('rid')) {
+                        $new->setAttribute('href', '#' . $rid);
+                    }
+                    break;
                 case 'ext-link':
                     $new = $document->createElement('a');
                     $new->setAttribute('href', $current->getAttributeNS('http://www.w3.org/1999/xlink', 'href') ?: $current->getAttribute('href'));
