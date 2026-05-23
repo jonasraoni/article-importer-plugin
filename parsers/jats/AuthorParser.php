@@ -13,6 +13,7 @@
 namespace APP\plugins\importexport\articleImporter\parsers\jats;
 
 use APP\author\Author;
+use APP\plugins\importexport\articleImporter\ArticleImporterPlugin;
 use APP\publication\Publication;
 use APP\facades\Repo;
 use DOMElement;
@@ -28,10 +29,26 @@ trait AuthorParser
      */
     private function _processAuthors(Publication $publication): void
     {
+        $doi = $this->getPublicIds()['doi'] ?? null;
+        $doi = explode('.', $doi);
+        $version = array_pop($doi);
+        $articleId = array_pop($doi);
+        $connection = ArticleImporterPlugin::getOreConnection();
+        $databaseEmails = $connection->table('f1000r_author', 'a')
+            ->leftJoin('f1000r_author_version as av', 'a.id', '=', 'av.author_id')
+            ->leftJoin('f1000r_version as v', 'av.version_id', '=', 'v.id')
+            ->where('v.article_id', $articleId)
+            ->where('v.version_number', $version)
+            ->where('v.status', 'PUBLISHED')
+            ->orderBy('av.author_position')
+            ->pluck('a.email')
+            ->all();
+
         $firstCorrespYesAuthor = $firstCorrespNotNoAuthor = null;
         $hasAuthor = false;
         foreach ($this->select("front/article-meta/contrib-group[@content-type='authors']/contrib|front/article-meta/contrib-group/contrib[@contrib-type='author']") as $node) {
-            $author = $this->_processAuthor($publication, $node);
+            $databaseEmail = array_shift($databaseEmails);
+            $author = $this->_processAuthor($publication, $node, $databaseEmail);
             $hasAuthor = true;
             $corresp = mb_strtolower(trim($node->getAttribute('corresp') ?? ''));
             if ($corresp === 'yes' && !$firstCorrespYesAuthor) {
@@ -51,7 +68,7 @@ trait AuthorParser
     /**
      * Handles an author node
      */
-    private function _processAuthor(Publication $publication, DOMNode $authorNode): Author
+    private function _processAuthor(Publication $publication, DOMNode $authorNode, $databaseEmail = null): Author
     {
         $node = $this->selectFirst('name|string-name', $authorNode);
 
@@ -130,7 +147,7 @@ trait AuthorParser
             }
         }
 
-        $email = $email ?: $this->getConfiguration()->getEmail();
+        $email = $email ?: $databaseEmail ?: $this->getConfiguration()->getEmail();
 
         $author = Repo::author()->newDataObject();
         $author->setData('givenName', $firstName, $this->getLocale());

@@ -13,6 +13,7 @@ require_once __DIR__ . '/../../../tools/bootstrap.php';
 use APP\core\Application;
 use APP\core\PageRouter;
 use APP\facades\Repo;
+use APP\plugins\importexport\articleImporter\ArticleImporterPlugin;
 use APP\plugins\importexport\articleImporter\Configuration;
 use APP\plugins\importexport\articleImporter\OreImporter;
 use APP\submission\Submission;
@@ -24,24 +25,13 @@ use PKP\plugins\Hook;
 new CommandLineTool();
 
 // Configuration
-$contextPath = $argv[1] ?? 'default-context';
-$username = $argv[2] ?? 'admin';
-$editorUsername = $argv[3] ?? 'editor';
-$email = $argv[4] ?? 'admin@example.com';
+$contextPath = $argv[1] ?? throw new Exception('Context path is required');
+$username = $argv[2] ?? throw new Exception('Username is required');
+$editorUsername = $argv[3] ?? throw new Exception('Editor username is required');
+$email = $argv[4] ?? throw new Exception('Email is required');
 
 
-$capsule = new Illuminate\Database\Capsule\Manager;
-$capsule->addConnection([
-    'driver' => 'pgsql',
-    'host' => '127.0.0.1',
-    'database' => 'ore',
-    'username' => 'root',
-    'password' => 'abc123',
-], 'source');
-
-
-// Database connection - adjust connection name if needed
-$connection = $capsule->getConnection('source'); // or 'pgsql' depending on your config
+$connection = ArticleImporterPlugin::getOreConnection();
 
 // Create configuration
 $configuration = new Configuration(

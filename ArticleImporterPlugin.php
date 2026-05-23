@@ -26,6 +26,23 @@ use Throwable;
 
 class ArticleImporterPlugin extends ImportExportPlugin
 {
+    private static $oreConnection;
+    public static function getOreConnection(): \Illuminate\Database\Connection
+    {
+        if (static::$oreConnection) {
+            return static::$oreConnection;
+        }
+
+        $capsule = new \Illuminate\Database\Capsule\Manager;
+        $capsule->addConnection([
+            'driver' => 'pgsql',
+            'host' => getenv('F1000_DB_HOST') ?: '127.0.0.1',
+            'database' => getenv('F1000_DB_NAME') ?: 'ore',
+            'username' => getenv('F1000_DB_USER') ?: 'root',
+            'password' => getenv('F1000_DB_PASS') ?: 'abc123',
+        ], 'source');
+        return static::$oreConnection = $capsule->getConnection('source');
+    }
 
     /**
      * @copydoc ImportExportPlugin::getDescription()
