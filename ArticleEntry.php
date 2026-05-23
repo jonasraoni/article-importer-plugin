@@ -12,8 +12,11 @@
 
 namespace APP\plugins\importexport\articleImporter;
 
+use APP\facades\Repo;
 use APP\plugins\importexport\articleImporter\exceptions\ArticleSkippedException;
+use APP\publication\enums\VersionStage;
 use Generator;
+use PKP\publication\helpers\PublicationVersionInfo;
 use SplFileInfo;
 
 class ArticleEntry
@@ -82,9 +85,55 @@ class ArticleEntry
      */
     public function process(Configuration $configuration): void
     {
+        $oreConnection = ArticleImporterPlugin::getOreConnection();
+        $approvals = 0;
+        $approvalsWithReservations = 0;
+        $versionMajor = 0;
+        $previouslyPassedReview = false;
         $processed = false;
         foreach ($this->getVersions() as $version) {
-            $version->process($configuration);
+            $parser = $version->process($configuration);
+            $publication = $parser->getPublication();
+            $doi = $parser->getPublicIds()['doi'] ?? null;
+            $doi = explode('.', $doi);
+            $version = array_pop($doi);
+            $articleId = array_pop($doi);
+            $reports = $oreConnection
+                ->table('f1000r_report as r')
+                ->leftJoin('f1000r_version as v', 'r.version_id', '=', 'v.id')
+                ->where('v.article_id', $articleId)
+                ->where('v.version_number', $version)
+                ->where('v.status', 'PUBLISHED')
+                ->where('r.status', 'PUBLISHED')
+                ->select('r.decision')
+                ->get();
+
+            foreach ($reports as $report) {
+                match ($report->decision) {
+                    'APPROVED' => $approvals++,
+                    'APPROVED_WITH_RESERVATIONS' => $approvalsWithReservations++,
+                    default => null
+                };
+            }
+            $passedReview = $approvals >= 2 || ($approvals >= 1 && $approvalsWithReservations >= 2);
+            ++$versionMajor;
+            if ($passedReview && !$previouslyPassedReview) {
+                $previouslyPassedReview = true;
+                $publication->setVersion(new PublicationVersionInfo(VersionStage::PUBLISHED_MANUSCRIPT_UNDER_REVIEW, $versionMajor, 0));
+                // Publishes the article
+                $doi = $publication->getData('doiObject');
+                $publication->setData('doiObject', null);
+                Repo::publication()->publish($publication);
+                $versionMajor = 1;
+                $publicationId = Repo::publication()->version($publication, VersionStage::VERSION_OF_RECORD, false);
+                $publication = Repo::publication()->get($publicationId);
+                $publication->setData('doiObject', $doi);
+            }
+
+            $publication->setVersion(new PublicationVersionInfo($passedReview ? VersionStage::VERSION_OF_RECORD : VersionStage::PUBLISHED_MANUSCRIPT_UNDER_REVIEW, $versionMajor, 0));
+            // Publishes the article
+            Repo::publication()->publish($publication);
+
             $processed = true;
         }
 

@@ -12,6 +12,7 @@
 
 namespace APP\plugins\importexport\articleImporter\parsers\jats;
 
+use APP\plugins\importexport\articleImporter\ArticleImporterPlugin;
 use APP\plugins\importexport\articleImporter\EntityManager;
 use APP\plugins\importexport\articleImporter\Funders;
 use APP\publication\enums\VersionStage;
@@ -40,11 +41,17 @@ trait PublicationParser
 {
     use EntityManager;
 
+    private ?Publication $_publication = null;
+
     /**
      * Parse, import and retrieve the publication
      */
     public function getPublication(): Publication
     {
+        if ($this->_publication) {
+            return $this->_publication;
+        }
+
         $publicationDate = $this->getPublicationDate() ?: $this->getIssuePublicationDate();
         $version = $this->getArticleVersion()->getVersion();
         $submission = $this->getSubmission();
@@ -200,7 +207,7 @@ trait PublicationParser
         // Publishes the article
         Repo::publication()->publish($publication);
 
-        return $publication;
+        return $this->_publication = $publication;
     }
 
     /**
