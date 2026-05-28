@@ -1460,13 +1460,19 @@ class OreImporter
         $review_round_dao = DAORegistry::getDAO('ReviewRoundDAO'); /** @var ReviewRoundDAO $review_round_dao */
 
         // Process each version (grouped by version_number)
+        $offset = 0;
         foreach ($reviews_by_version_number as $version_number => $version_reviews) {
             $review = reset($version_reviews);
             // Find the publication for this version
             $publication = null;
+            /** @var Publication $pub */
             foreach ($publications as $pub) {
-                if ($pub->getData('seq') == $version_number) {
+                if ($pub->getData('seq') + $offset == $version_number) {
                     $publication = $pub;
+                    // When the publication becomes a VOR, a new PMUR version is inserted at the position by the import plugin
+                    if (!$offset && $pub->getVersion()->stage == VersionStage::VERSION_OF_RECORD) {
+                        $offset = 1;
+                    }
                     break;
                 }
             }
