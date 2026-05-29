@@ -24,6 +24,35 @@ use PKP\plugins\Hook;
 
 new CommandLineTool();
 
+if (isset($argv[1]) && $argv[1] === '--cleanup') {
+    echo "Deleting submissions\n";
+    foreach(DB::select("select distinct p.submission_id from publication_settings ps inner join publications p on p.publication_id = ps.publication_id where ps.setting_name = 'pub-id::publisher-id'") as $row) {
+        try {
+            DB::delete("delete from review_assignments where submission_id = ?", [$row->submission_id]);
+            DB::delete("delete from review_rounds where submission_id = ?", [$row->submission_id]);
+
+            $submission = Repo::submission()->get($row->submission_id);
+            echo "Deleting submission: " . $row->submission_id . "\n";
+            if ($submission) {
+                for($i = 0; $i < 3; $i++) {
+                    Repo::submission()->delete($submission);
+                }
+            }
+        } catch (\Throwable $e) {
+            echo "$e\n\n";
+        }
+    }
+    echo "Cleaning tombstones\n";
+    DB::delete(
+        "DELETE dot
+        FROM data_object_tombstones dot
+        LEFT JOIN submissions s ON dot.data_object_id = s.submission_id
+        WHERE s.submission_id IS NULL"
+    );
+    echo "Cleanup done\n";
+    exit(0);
+}
+
 // Configuration
 $contextPath = $argv[1] ?? throw new Exception('Context path is required');
 $username = $argv[2] ?? throw new Exception('Username is required');
@@ -108,6 +137,7 @@ try {
                 ['setting_value']
             );
         }
+        DB::update("UPDATE user_user_groups SET date_start = NULL");
     } elseif (isset($argv[5])) {
         // Import specific article
         $articleId = $argv[5];
