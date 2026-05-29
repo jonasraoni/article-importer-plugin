@@ -34,7 +34,7 @@ if (isset($argv[1]) && $argv[1] === '--cleanup') {
             $submission = Repo::submission()->get($row->submission_id);
             echo "Deleting submission: " . $row->submission_id . "\n";
             if ($submission) {
-                for($i = 0; $i < 3; $i++) {
+                for($i = 0; $i < 20; $i++) {
                     Repo::submission()->delete($submission);
                 }
             }
