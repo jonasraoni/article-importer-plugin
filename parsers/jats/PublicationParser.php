@@ -144,6 +144,8 @@ trait PublicationParser
         $publication->setData('copyrightYear', $this->selectText('front/article-meta/permissions/copyright-year') ?: $publicationDate->format('Y'));
         $publication->setData('licenseUrl', $this->selectText('front/article-meta/permissions/license/attribute::xlink:href'));
 
+        $this->_processSummaryOfChanges($publication);
+
         $publication = $this->_processCitations($publication);
         $this->setPublicationCoverImage($publication);
         $this->_processCategories($publication);
@@ -171,6 +173,47 @@ trait PublicationParser
         Repo::publication()->publish($publication);
 
         return $publication;
+    }
+
+    /**
+     * Parses the version amendments (summary of changes) from JATS notes
+     *
+     * Expects a structure such as:
+     *   <notes>
+     *     <sec sec-type="version-changes">
+     *       <label>Revised</label>
+     *       <title>Amendments from Version 1</title>
+     *       <p>...</p>
+     *     </sec>
+     *   </notes>
+     */
+    private function _processSummaryOfChanges(Publication $publication): void
+    {
+        /** @var DOMElement $sec */
+        foreach ($this->select('//notes/sec[@sec-type="version-changes"]') as $sec) {
+            $locale = $this->getLocale($sec->getAttribute('xml:lang'));
+            /** @var DOMElement $sec */
+            $sec = $sec->cloneNode(true);
+            $document = $sec->ownerDocument;
+
+            // The <label> ("Revised") is just a categorization marker, not content
+            /** @var DOMElement $label */
+            foreach (iterator_to_array($sec->getElementsByTagName('label')) as $label) {
+                $label->parentNode->removeChild($label);
+            }
+
+            $this->convertJatsToHtml($sec);
+
+            $html = '';
+            foreach (iterator_to_array($sec->childNodes) as $child) {
+                $html .= $document->saveXML($child);
+            }
+            $html = trim($html);
+
+            if ($html !== '') {
+                $publication->setData('summaryOfChanges', $html, $locale);
+            }
+        }
     }
 
     /**
