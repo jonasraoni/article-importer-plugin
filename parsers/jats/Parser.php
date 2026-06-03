@@ -87,6 +87,9 @@ class Parser extends BaseParser
                 case 'sub':
                 case 'sup':
                     break;
+                case 'title':
+                    $new = $document->createElement('strong');
+                    break;
                 case 'bold':
                     $new = $document->createElement('b');
                     break;
