@@ -266,6 +266,17 @@ trait PublicationParser
             $label = $label ? trim($label->textContent, "\n\r\t\v\0.") : '';
             $label = $label ? "{$label}. " : '';
             $citationNode = $this->convertJatsToHtml($citation->getElementsByTagName('mixed-citation')->item(0));
+            if ($citationNode) {
+                // The tags are stripped later on, so fold the URL into the text to avoid losing it
+                /** @var DOMElement $anchor */
+                foreach (iterator_to_array($citationNode->getElementsByTagName('a')) as $anchor) {
+                    $href = trim($anchor->getAttribute('href'));
+                    $text = trim($anchor->textContent);
+                    if ($href !== '' && $text !== $href) {
+                        $anchor->textContent = $text === '' ? $href : "{$text} ({$href})";
+                    }
+                }
+            }
             $citationText = $citationNode ? $citationNode->ownerDocument->saveXML($citationNode) : '';
             $document = new DOMDocument();
             $document->preserveWhiteSpace = false;
