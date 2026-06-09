@@ -29,6 +29,7 @@ use PKP\core\Core;
 use APP\core\Application;
 use PKP\i18n\LocaleConversion;
 use PKP\submission\Genre;
+use PKP\submissionFile\enums\MediaVariantType;
 use PKP\submissionFile\SubmissionFile;
 use APP\facades\Repo;
 use PKP\controlledVocab\ControlledVocab;
@@ -282,7 +283,7 @@ trait PublicationParser
         $newSubmissionFile->setData('credit', '');
         $newSubmissionFile->setData('copyrightOwner', '');
         $newSubmissionFile->setData('terms', '');
-
+        $newSubmissionFile->setData('variantType', MediaVariantType::WEB);
         Repo::submissionFile()->add($newSubmissionFile);
     }
 
