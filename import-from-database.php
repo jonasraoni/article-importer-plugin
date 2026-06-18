@@ -25,6 +25,10 @@ use PKP\plugins\Hook;
 new CommandLineTool();
 
 if (isset($argv[1]) && $argv[1] === '--cleanup') {
+    echo "Deleting jobs\n";
+    DB::delete("delete from failed_jobs");
+    DB::delete("delete from jobs");
+
     echo "Deleting submissions\n";
     foreach(DB::select("select distinct p.submission_id from publication_settings ps inner join publications p on p.publication_id = ps.publication_id where ps.setting_name = 'pub-id::publisher-id'") as $row) {
         try {
