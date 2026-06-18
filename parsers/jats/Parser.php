@@ -142,7 +142,7 @@ class Parser extends BaseParser
                 case 'list':
                     $new = $document->createElement('ul');
                     if ($current->getAttribute('list-type') === 'order') {
-                        $new = new DOMElement('ol');
+                        $new = $document->createElement('ol');
                     }
 
                     break;
