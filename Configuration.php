@@ -54,6 +54,8 @@ class Configuration
     private bool $_useCategoryAsSection = true;
     /** @var bool Generate HTML from JATS files */
     private bool $_generateHtml = true;
+    /** @var bool Whether the version folder level is present in the import structure */
+    private bool $_hasVersion = true;
 
     /**
      * Constructor
@@ -67,13 +69,15 @@ class Configuration
      * @param string $defaultSectionName Default section name
      * @param bool $generateHtml Whether to generate HTML from JATS files
      * @param bool $useCategoryAsSection Whether to use category as section
+     * @param bool $hasVersion Whether the import structure includes a version folder level
      */
-    public function __construct(array $parsers, string $contextPath, string $username, string $editorUsername, string $email, string $importPath, string $defaultSectionName = 'Articles', bool $generateHtml = true, bool $useCategoryAsSection = false)
+    public function __construct(array $parsers, string $contextPath, string $username, string $editorUsername, string $email, string $importPath, string $defaultSectionName = 'Articles', bool $generateHtml = true, bool $useCategoryAsSection = false, bool $hasVersion = true)
     {
         $this->_defaultSectionName = $defaultSectionName;
         $this->_parsers = $parsers;
         $this->_generateHtml = $generateHtml;
         $this->_useCategoryAsSection = $useCategoryAsSection;
+        $this->_hasVersion = $hasVersion;
         if (!$this->_context = Application::getContextDAO()->getByPath($contextPath)) {
             throw new InvalidArgumentException(__('plugins.importexport.articleImporter.unknownJournal', ['journal' => $contextPath]));
         }
@@ -232,11 +236,19 @@ class Configuration
     }
 
     /**
+     * Retrieves whether the import structure includes a version folder level
+     */
+    public function hasVersion(): bool
+    {
+        return $this->_hasVersion;
+    }
+
+    /**
      * Retrieves an article iterator
      */
     public function getArticleIterator(): ArticleIterator
     {
-        return new ArticleIterator($this->getImportPath());
+        return new ArticleIterator($this->getImportPath(), $this->_hasVersion);
     }
 
     /**

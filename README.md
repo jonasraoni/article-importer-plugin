@@ -25,8 +25,10 @@ Where:
 - `xml` is the parent folder for all the exported articles
 - `volume#` is the volume number folder that contains all issues for the volume
 - `issue#` is the issue number folder that contains all articles for the issue
-- `article#` is the article # folder that contains the  article metadata.xml and fulltext.pdf files
-- `version#` is the version # folder that contains the article metadata.xml and fulltext.pdf files
+- `article#` is the article # folder. If the `--no-version` flag is used, then it should contain the article metadata.xml and fulltext.pdf files
+- `version#` is the version # folder that contain the article metadata.xml and fulltext.pdf files
+
+The `version#` folder is optional. If you pass the `--no-version` flag, the `article#` folder is expected to hold the `metadata.xml`/`fulltext.pdf` files directly and a single version is assumed. This is handy when articles have a single version.
 
 All `#` designations will be treated as numeric values; e.g. 'no.01-02' will be interpreted as "1".
 

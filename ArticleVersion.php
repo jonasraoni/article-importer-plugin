@@ -26,16 +26,21 @@ class ArticleVersion
     private ArticleEntry $_articleEntry;
     /** @var SplFileInfo The version directory */
     private SplFileInfo $_directory;
+    /** @var ?int Explicit version number, used when there's no version folder to derive it from */
+    private ?int $_version;
 
     /**
      * Constructor
      *
      * @param ArticleEntry $articleEntry The parent article entry
+     * @param SplFileInfo $directory The version directory (or the article directory when versions are not foldered)
+     * @param ?int $version Explicit version number, falls back to the directory name when null
      */
-    public function __construct(ArticleEntry $articleEntry, SplFileInfo $directory)
+    public function __construct(ArticleEntry $articleEntry, SplFileInfo $directory, ?int $version = null)
     {
         $this->_articleEntry = $articleEntry;
         $this->_directory = $directory;
+        $this->_version = $version;
     }
 
     /**
@@ -171,6 +176,6 @@ class ArticleVersion
      */
     public function getVersion(): int
     {
-        return (int) $this->_directory->getFilename();
+        return $this->_version ?? (int) $this->_directory->getFilename();
     }
 }

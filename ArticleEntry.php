@@ -29,15 +29,19 @@ class ArticleEntry
     private int $_issue = 0;
     /** @var string The article's number */
     private int $_article = 0;
+    /** @var bool Whether the article holds its versions in sub-folders */
+    private bool $_hasVersion = true;
 
     /**
      * Constructor
      *
      * @param SplFileInfo $directory The article directory
+     * @param bool $hasVersion Whether versions are kept in sub-folders. When false, the article directory itself is the single version.
      */
-    public function __construct(SplFileInfo $directory)
+    public function __construct(SplFileInfo $directory, bool $hasVersion = true)
     {
         $this->_directory = $directory;
+        $this->_hasVersion = $hasVersion;
         foreach ([&$this->_article, &$this->_issue, &$this->_volume] as &$item) {
             $item = $directory->getFilename();
             $directory = $directory->getPathInfo();
@@ -51,9 +55,31 @@ class ArticleEntry
      */
     public function getVersions(): Generator
     {
+        // When versions aren't foldered, the article directory itself is the single (first) version
+        if (!$this->_hasVersion) {
+            yield new ArticleVersion($this, $this->_directory, 1);
+            return;
+        }
         foreach (glob("{$this->_directory->getPathname()}/*", GLOB_ONLYDIR) as $versionDir) {
             yield new ArticleVersion($this, new SplFileInfo($versionDir));
         }
+    }
+
+    /**
+     * Retrieves the article directory
+     */
+    public function getDirectory(): SplFileInfo
+    {
+        return $this->_directory;
+    }
+
+    /**
+     * Retrieves the directory that represents the issue (the parent of the article directory).
+     * Used to locate issue-level assets such as the cover image.
+     */
+    public function getIssueDirectory(): ?SplFileInfo
+    {
+        return $this->_directory->getPathInfo();
     }
 
     /**

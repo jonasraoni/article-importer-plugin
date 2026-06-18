@@ -67,6 +67,7 @@ class ArticleImporterPlugin extends ImportExportPlugin
         // Parse command-line flags
         $generateHtml = !in_array('--no-html', $args);
         $useCategoryAsSection = in_array('--use-category-as-section', $args);
+        $hasVersion = !in_array('--no-version', $args);
 
         $count = $imported = $failed = $skipped = 0;
         try {
@@ -79,7 +80,8 @@ class ArticleImporterPlugin extends ImportExportPlugin
                 $importPath,
                 'Articles',
                 $generateHtml,
-                $useCategoryAsSection
+                $useCategoryAsSection,
+                $hasVersion
             );
 
             $this->_writeLine(__('plugins.importexport.articleImporter.importStart'));

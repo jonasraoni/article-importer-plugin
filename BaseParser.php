@@ -319,8 +319,11 @@ abstract class BaseParser
     public function setIssueCoverImage(Issue $issue): void
     {
         $issueCover = null;
-        $issueFolder = (string) $this->getArticleVersion()->getPath();
-        foreach (new GlobIterator("{$issueFolder}/../../" . $this->getConfiguration()->getCoverFilename() . '.*') as $file) {
+        $issueFolder = $this->getArticleEntry()->getIssueDirectory();
+        if (!$issueFolder) {
+            return;
+        }
+        foreach (new GlobIterator("{$issueFolder}/" . $this->getConfiguration()->getCoverFilename() . '.*') as $file) {
             if (in_array(strtolower($file->getExtension()), $this->getConfiguration()->getImageExtensions())) {
                 $issueCover = $file;
                 break;

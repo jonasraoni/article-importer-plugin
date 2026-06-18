@@ -20,10 +20,13 @@ class ArticleIterator implements IteratorAggregate
 {
     /** @var string The path */
     private string $path;
+    /** @var bool Whether the article folders contain version sub-folders */
+    private bool $hasVersion;
 
-    public function __construct(string $path)
+    public function __construct(string $path, bool $hasVersion = true)
     {
         $this->path = $path;
+        $this->hasVersion = $hasVersion;
     }
 
     /**
@@ -34,7 +37,7 @@ class ArticleIterator implements IteratorAggregate
     {
         // volume/issue/article
         foreach (glob("{$this->path}/*/*/*", GLOB_ONLYDIR) as $path) {
-            yield new ArticleEntry(new SplFileInfo($path));
+            yield new ArticleEntry(new SplFileInfo($path), $this->hasVersion);
         }
     }
 }
