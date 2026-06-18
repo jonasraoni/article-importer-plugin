@@ -53,7 +53,11 @@ trait PublicationParser
             return $this->_publication;
         }
 
+        // getPublicationDate() throws when the article XML has no date; in continuous publishing (no issue) a date is therefore required
         $publicationDate = $this->getPublicationDate() ?: $this->getIssuePublicationDate();
+        if (!$publicationDate) {
+            throw new Exception(__('plugins.importexport.articleImporter.missingPublicationDate'));
+        }
         $version = $this->getArticleVersion()->getVersion();
         $submission = $this->getSubmission();
 
@@ -75,7 +79,7 @@ trait PublicationParser
         $publication->setData('accessStatus', Submission::ARTICLE_ACCESS_OPEN);
         $publication->setData('datePublished', $publicationDate->format(static::DATETIME_FORMAT));
         $publication->setData('sectionId', $this->getSection()->getId());
-        $publication->setData('issueId', $this->getIssue()->getId());
+        $publication->setData('issueId', $this->getIssue()?->getId());
         $publication->setData('urlPath', null);
 
         // Set article pages
@@ -570,7 +574,13 @@ trait PublicationParser
     public function getPublicIds(): array
     {
         $articleEntry = $this->getArticleEntry();
-        $ids = ['publisher-id' => "{$articleEntry->getVolume()}.{$articleEntry->getIssue()}.{$articleEntry->getArticle()}.{$this->getArticleVersion()->getVersion()}"];
+        $idParts = array_filter([
+            $articleEntry->getVolume(),
+            $articleEntry->getIssue(),
+            $articleEntry->getArticle(),
+            $this->getArticleVersion()->getVersion(),
+        ], fn ($part) => $part !== null && $part !== '');
+        $ids = ['publisher-id' => implode('.', $idParts)];
         /** @var DOMElement $node */
         foreach ($this->select('front/article-meta/article-id') as $node) {
             $ids[strtolower($node->getAttribute('pub-id-type'))] = $this->selectText('.', $node);

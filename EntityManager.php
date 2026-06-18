@@ -107,11 +107,12 @@ trait EntityManager
     /**
      * Set cached section
      */
-    protected function setCachedSection(string $name, Section $section, Issue $issue): void
+    protected function setCachedSection(string $name, Section $section, ?Issue $issue): void
     {
         static::$cache['section'][$name] = $section;
 
-        if (!$section) {
+        // Custom section ordering is per-issue; skip it for continuous publishing (no issue)
+        if (!$issue) {
             return;
         }
 

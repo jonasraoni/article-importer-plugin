@@ -25,20 +25,24 @@ trait IssueParser
     private ?Issue $_issue = null;
 
     /**
-     * Parses and retrieves the issue, if an issue with the same name exists, it will be retrieved
+     * Parses and retrieves the issue, if an issue with the same name exists, it will be retrieved.
+     * Returns null for continuous publishing when no volume/number folder is present.
      */
-    public function getIssue(): Issue
+    public function getIssue(): ?Issue
     {
         if ($this->_issue) {
             return $this->_issue;
         }
 
         $entry = $this->getArticleEntry();
-        if ($issue = $this->getCachedIssue($entry->getVolume(), $entry->getIssue())) {
-            return $this->_issue = $issue;
+        $volume = $entry->getVolume();
+        $number = $entry->getIssue();
+        // No issue: continuous publishing
+        if (($volume === null || $volume === '') && ($number === null || $number === '')) {
+            return null;
         }
 
-        if ($this->_issue = $this->getCachedIssue($entry->getVolume(), $entry->getIssue())) {
+        if ($this->_issue = $this->getCachedIssue((string) $volume, (string) $number)) {
             return $this->_issue;
         }
 
@@ -48,30 +52,31 @@ trait IssueParser
             ?: $this->getDateFromNode($this->selectFirst('Journal/Volume/Issue/IssueInfo/IssueHistory/CoverDate'))
             ?: $this->getPublicationDate();
         $issue->setData('journalId', $this->getContextId());
-        $issue->setData('volume', $entry->getVolume());
-        $issue->setData('number', $entry->getIssue());
+        $issue->setData('volume', $volume);
+        $issue->setData('number', $number);
         $issue->setData('year', (int) $publicationDate->format('Y'));
         $issue->setData('published', true);
         $issue->setData('current', false);
         $issue->setData('datePublished', $publicationDate->format(static::DATETIME_FORMAT));
         $issue->setData('accessStatus', Issue::ISSUE_ACCESS_OPEN);
-        $issue->setData('showVolume', true);
-        $issue->setData('showNumber', true);
+        $issue->setData('showVolume', $volume !== null && $volume !== '');
+        $issue->setData('showNumber', $number !== null && $number !== '');
         $issue->setData('showYear', true);
         $issue->setData('showTitle', false);
         $issue->stampModified();
         Repo::issue()->add($issue);
         $this->setIssueCoverImage($issue);
         $this->trackEntity($issue);
-        $this->setCachedIssue($entry->getVolume(), $entry->getIssue(), $issue);
+        $this->setCachedIssue((string) $volume, (string) $number, $issue);
         return $this->_issue = $issue;
     }
 
     /**
-     * Retrieves the issue publication date
+     * Retrieves the issue publication date, or null for continuous publishing (no issue)
      */
-    public function getIssuePublicationDate(): DateTimeImmutable
+    public function getIssuePublicationDate(): ?DateTimeImmutable
     {
-        return new DateTimeImmutable($this->getIssue()->getData('datePublished'));
+        $issue = $this->getIssue();
+        return $issue ? new DateTimeImmutable($issue->getData('datePublished')) : null;
     }
 }

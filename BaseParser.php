@@ -79,9 +79,9 @@ abstract class BaseParser
     abstract public function getPublication(): Publication;
 
     /**
-     * Parses the issue
+     * Parses the issue, returns null for continuous publishing (no issue)
      */
-    abstract public function getIssue(): Issue;
+    abstract public function getIssue(): ?Issue;
 
     /**
      * Parses the submission

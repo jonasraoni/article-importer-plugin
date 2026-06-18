@@ -56,6 +56,10 @@ class Configuration
     private bool $_generateHtml = true;
     /** @var bool Whether the version folder level is present in the import structure */
     private bool $_hasVersion = true;
+    /** @var bool Whether the volume folder level is present in the import structure */
+    private bool $_hasVolume = true;
+    /** @var bool Whether the number (issue) folder level is present in the import structure */
+    private bool $_hasNumber = true;
 
     /**
      * Constructor
@@ -70,14 +74,18 @@ class Configuration
      * @param bool $generateHtml Whether to generate HTML from JATS files
      * @param bool $useCategoryAsSection Whether to use category as section
      * @param bool $hasVersion Whether the import structure includes a version folder level
+     * @param bool $hasVolume Whether the import structure includes a volume folder level
+     * @param bool $hasNumber Whether the import structure includes a number (issue) folder level
      */
-    public function __construct(array $parsers, string $contextPath, string $username, string $editorUsername, string $email, string $importPath, string $defaultSectionName = 'Articles', bool $generateHtml = true, bool $useCategoryAsSection = false, bool $hasVersion = true)
+    public function __construct(array $parsers, string $contextPath, string $username, string $editorUsername, string $email, string $importPath, string $defaultSectionName = 'Articles', bool $generateHtml = true, bool $useCategoryAsSection = false, bool $hasVersion = true, bool $hasVolume = true, bool $hasNumber = true)
     {
         $this->_defaultSectionName = $defaultSectionName;
         $this->_parsers = $parsers;
         $this->_generateHtml = $generateHtml;
         $this->_useCategoryAsSection = $useCategoryAsSection;
         $this->_hasVersion = $hasVersion;
+        $this->_hasVolume = $hasVolume;
+        $this->_hasNumber = $hasNumber;
         if (!$this->_context = Application::getContextDAO()->getByPath($contextPath)) {
             throw new InvalidArgumentException(__('plugins.importexport.articleImporter.unknownJournal', ['journal' => $contextPath]));
         }
@@ -244,11 +252,27 @@ class Configuration
     }
 
     /**
+     * Retrieves whether the import structure includes a volume folder level
+     */
+    public function hasVolume(): bool
+    {
+        return $this->_hasVolume;
+    }
+
+    /**
+     * Retrieves whether the import structure includes a number (issue) folder level
+     */
+    public function hasNumber(): bool
+    {
+        return $this->_hasNumber;
+    }
+
+    /**
      * Retrieves an article iterator
      */
     public function getArticleIterator(): ArticleIterator
     {
-        return new ArticleIterator($this->getImportPath(), $this->_hasVersion);
+        return new ArticleIterator($this->getImportPath(), $this->_hasVersion, $this->_hasVolume, $this->_hasNumber);
     }
 
     /**

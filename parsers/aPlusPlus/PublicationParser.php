@@ -36,7 +36,8 @@ trait PublicationParser
      */
     public function getPublication(): Publication
     {
-        $publicationDate = $this->getPublicationDate() ?: $this->getIssue()->getDatePublished();
+        // getPublicationDate() throws when no date is available; in continuous publishing (no issue) a date is therefore required
+        $publicationDate = $this->getPublicationDate();
         $version = $this->getArticleVersion()->getVersion();
         $submission = $this->getSubmission();
 
@@ -59,7 +60,7 @@ trait PublicationParser
         $publication->setData('accessStatus', $this->_getAccessStatus());
         $publication->setData('datePublished', $publicationDate->format(static::DATETIME_FORMAT));
         $publication->setData('sectionId', $this->getSection()->getId());
-        $publication->setData('issueId', $this->getIssue()->getId());
+        $publication->setData('issueId', $this->getIssue()?->getId());
         $publication->setData('urlPath', null);
 
         // Set article pages
@@ -239,7 +240,13 @@ trait PublicationParser
     public function getPublicIds(): array
     {
         $articleEntry = $this->getArticleEntry();
-        $ids = ['publisher-id' => "{$articleEntry->getVolume()}.{$articleEntry->getIssue()}.{$articleEntry->getArticle()}.{$this->getArticleVersion()->getVersion()}"];
+        $idParts = array_filter([
+            $articleEntry->getVolume(),
+            $articleEntry->getIssue(),
+            $articleEntry->getArticle(),
+            $this->getArticleVersion()->getVersion(),
+        ], fn ($part) => $part !== null && $part !== '');
+        $ids = ['publisher-id' => implode('.', $idParts)];
         if ($value = $this->selectText('Journal/Volume/Issue/Article/@ID')) {
             $ids['publisher-id'] = $value;
         }

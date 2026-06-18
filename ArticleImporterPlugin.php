@@ -68,6 +68,8 @@ class ArticleImporterPlugin extends ImportExportPlugin
         $generateHtml = !in_array('--no-html', $args);
         $useCategoryAsSection = in_array('--use-category-as-section', $args);
         $hasVersion = !in_array('--no-version', $args);
+        $hasVolume = !in_array('--no-volume', $args);
+        $hasNumber = !in_array('--no-number', $args);
 
         $count = $imported = $failed = $skipped = 0;
         try {
@@ -81,7 +83,9 @@ class ArticleImporterPlugin extends ImportExportPlugin
                 'Articles',
                 $generateHtml,
                 $useCategoryAsSection,
-                $hasVersion
+                $hasVersion,
+                $hasVolume,
+                $hasNumber
             );
 
             $this->_writeLine(__('plugins.importexport.articleImporter.importStart'));
@@ -114,7 +118,7 @@ class ArticleImporterPlugin extends ImportExportPlugin
             /** @var ArticleEntry */
             foreach ($iterator as $entry) {
                 ++$count;
-                $article = implode('-', [$entry->getVolume(), $entry->getIssue(), $entry->getArticle()]);
+                $article = implode('-', array_filter([$entry->getVolume(), $entry->getIssue(), $entry->getArticle()], fn ($part) => $part !== null && $part !== ''));
                 try {
                     // Process the article
                     $entry->process($configuration);
@@ -158,6 +162,10 @@ class ArticleImporterPlugin extends ImportExportPlugin
                 ->orderByRaw('CAST(number AS UNSIGNED) DESC')
                 ->select('i.issue_id')
                 ->pluck('i.issue_id');
+        // Continuous publishing: nothing to resequence when there are no issues
+        if ($rsIssues->isEmpty()) {
+            return;
+        }
         $sequence = 0;
         $latestIssue = null;
         foreach ($rsIssues as $id) {

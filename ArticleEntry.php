@@ -23,12 +23,12 @@ class ArticleEntry
 {
     /** @var SplFileInfo The article directory */
     private SplFileInfo $_directory;
-    /** @var int The issue's volume */
-    private int $_volume = 0;
-    /** @var string The issue's number */
-    private int $_issue = 0;
+    /** @var ?int The issue's volume, null when the volume level is absent */
+    private ?int $_volume;
+    /** @var ?string The issue's number, null when the number level is absent */
+    private ?string $_number;
     /** @var string The article's number */
-    private int $_article = 0;
+    private string $_article;
     /** @var bool Whether the article holds its versions in sub-folders */
     private bool $_hasVersion = true;
 
@@ -36,16 +36,18 @@ class ArticleEntry
      * Constructor
      *
      * @param SplFileInfo $directory The article directory
+     * @param ?int $volume The issue's volume, or null when the volume level is absent
+     * @param ?string $number The issue's number, or null when the number level is absent
+     * @param string $article The article's number
      * @param bool $hasVersion Whether versions are kept in sub-folders. When false, the article directory itself is the single version.
      */
-    public function __construct(SplFileInfo $directory, bool $hasVersion = true)
+    public function __construct(SplFileInfo $directory, ?int $volume, ?string $number, string $article, bool $hasVersion = true)
     {
         $this->_directory = $directory;
+        $this->_volume = $volume;
+        $this->_number = $number;
+        $this->_article = $article;
         $this->_hasVersion = $hasVersion;
-        foreach ([&$this->_article, &$this->_issue, &$this->_volume] as &$item) {
-            $item = $directory->getFilename();
-            $directory = $directory->getPathInfo();
-        }
     }
 
     /**
@@ -76,26 +78,38 @@ class ArticleEntry
     /**
      * Retrieves the directory that represents the issue (the parent of the article directory).
      * Used to locate issue-level assets such as the cover image.
+     * Returns null when neither the volume nor the number level is present (continuous publishing, no issue).
      */
     public function getIssueDirectory(): ?SplFileInfo
     {
+        if ($this->_volume === null && $this->_number === null) {
+            return null;
+        }
         return $this->_directory->getPathInfo();
     }
 
     /**
-     * Retrieves the issue volume
+     * Retrieves the issue volume, or null when the volume level is absent
      */
-    public function getVolume(): int
+    public function getVolume(): ?int
     {
-        return (int) $this->_volume;
+        return $this->_volume;
     }
 
     /**
-     * Retrieves the issue number
+     * Retrieves the issue number, or null when the number level is absent
      */
-    public function getIssue(): string
+    public function getIssue(): ?string
     {
-        return $this->_issue;
+        return $this->_number;
+    }
+
+    /**
+     * Retrieves the issue number, or null when the number level is absent
+     */
+    public function getNumber(): ?string
+    {
+        return $this->_number;
     }
 
     /**

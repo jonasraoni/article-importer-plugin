@@ -28,7 +28,15 @@ Where:
 - `article#` is the article # folder. If the `--no-version` flag is used, then it should contain the article metadata.xml and fulltext.pdf files
 - `version#` is the version # folder that contain the article metadata.xml and fulltext.pdf files
 
-The `version#` folder is optional. If you pass the `--no-version` flag, the `article#` folder is expected to hold the `metadata.xml`/`fulltext.pdf` files directly and a single version is assumed. This is handy when articles have a single version.
+#### Optional folder levels
+
+The `volume#`, `issue#` (number) and `version#` levels are each optional and toggled with a CLI flag. The folder structure is `[volume#/][number#/]article#[/version#]`:
+
+- `--no-version` - the `article#` folder holds the `metadata.xml`/`fulltext.pdf` files directly; a single version is assumed. Handy for single-version articles.
+- `--no-volume` - there is no `volume#` level.
+- `--no-number` - there is no `issue#` (number) level.
+
+When both `--no-volume` and `--no-number` are passed, articles are imported without an issue (continuous publishing); in that case each article's metadata XML must contain a publication date. If only one of volume/number is present, an issue is created from whatever is available.
 
 All `#` designations will be treated as numeric values; e.g. 'no.01-02' will be interpreted as "1".
 
