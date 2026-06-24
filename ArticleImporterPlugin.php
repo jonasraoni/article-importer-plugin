@@ -14,6 +14,7 @@ namespace APP\plugins\importexport\articleImporter;
 
 use APP\journal\JournalDAO;
 use APP\plugins\importexport\articleImporter\exceptions\ArticleSkippedException;
+use APP\plugins\importexport\articleImporter\parsers\jats\Parser;
 use PKP\core\Registry;
 use PKP\db\DAORegistry;
 use PKP\plugins\Hook;
@@ -70,6 +71,7 @@ class ArticleImporterPlugin extends ImportExportPlugin
         $hasVersion = !in_array('--no-version', $args);
         $hasVolume = !in_array('--no-volume', $args);
         $hasNumber = !in_array('--no-number', $args);
+        $preloadHtml = in_array('--preload-html', $args);
 
         $count = $imported = $failed = $skipped = 0;
         try {
@@ -85,7 +87,8 @@ class ArticleImporterPlugin extends ImportExportPlugin
                 $useCategoryAsSection,
                 $hasVersion,
                 $hasVolume,
-                $hasNumber
+                $hasNumber,
+                $preloadHtml
             );
 
             $this->_writeLine(__('plugins.importexport.articleImporter.importStart'));
@@ -120,6 +123,15 @@ class ArticleImporterPlugin extends ImportExportPlugin
                 ++$count;
                 $article = implode('-', array_filter([$entry->getVolume(), $entry->getIssue(), $entry->getArticle()], fn ($part) => $part !== null && $part !== ''));
                 try {
+                    if ($configuration->shouldPreloadHtml()) {
+                        foreach ($entry->getVersions() as $version) {
+                            $parser = new Parser($configuration, $version);
+                            $parser->ensureMetadataIsValidAndParse()
+                                ->downloadHtml();
+                            ++$imported;
+                        }
+                        continue;
+                    }
                     // Process the article
                     $entry->process($configuration);
                     ++$imported;

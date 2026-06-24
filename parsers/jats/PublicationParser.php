@@ -208,6 +208,7 @@ trait PublicationParser
         $this->_insertXMLSubmissionFile($publication);
         // Process full text and generate HTML files
         $this->_processFullText(false);
+        $this->downloadHtml();
         $this->_insertHTMLGalley($publication);
         $this->_insertSupplementaryGalleys($publication);
 
@@ -255,6 +256,45 @@ trait PublicationParser
             if ($html !== '') {
                 $publication->setData('summaryOfChanges', $html, $locale);
             }
+        }
+    }
+
+    /**
+     * Downloads the HTML from ORE
+     */
+    public function downloadHtml(): void
+    {
+        $htmlPath = str_replace('.xml', '.html', $this->getArticleVersion()->getMetadataFile());
+        if (file_exists($htmlPath)) {
+            return;
+        }
+
+        $doi = $this->getPublicIds()['doi'] ?? null;
+        $doi = explode('.', $doi);
+        $version = array_pop($doi);
+        $articleId = array_pop($doi);
+        $connection = ArticleImporterPlugin::getOreConnection();
+        $versionId = $connection->table('f1000r_version as v')
+            ->where('v.article_id', $articleId)
+            ->where('v.version_number', $version)
+            ->value('v.id');
+        $url = 'https://open-research-europe.ec.europa.eu/api/versions?id=' . $versionId;
+        $client = Application::get()->getHttpClient();
+        $response = json_decode($client->request('GET', $url)->getBody(), true);
+        $response = $response[0] ?? null;
+        $htmlUrl = $response['htmlUrl'] ?? null;
+        if ($htmlUrl) {
+            $response = $client->request('GET', $htmlUrl);
+            $html = "<html>
+    <head>
+        <link rel=\"stylesheet\" type=\"text/css\" href=\"/styles/fulltext.css\"/>
+        <script defer=\"defer\" src=\"/js/fulltext.js\"></script>
+    </head>
+    <body>
+        {$response->getBody()}
+    </body>
+</html>";
+            file_put_contents($htmlPath, $html);
         }
     }
 
@@ -403,13 +443,16 @@ trait PublicationParser
         $userId = $this->getConfiguration()->getUser()->getId();
 
         $submission = $this->getSubmission();
+        $content = $this->replaceExternalReferences(file_get_contents($filename));
+        $tmpFilename = tempnam(sys_get_temp_dir(), 'jats');
+        file_put_contents($tmpFilename, $content);
 
         /** @var PKPFileService $fileService */
         $fileService = Services::get('file');
 
         $submissionDir = Repo::submissionFile()->getSubmissionDir($submission->getData('contextId'), $submission->getId());
         $newFileId = $fileService->add(
-            $filename,
+            $tmpFilename,
             $submissionDir . '/' . uniqid() . '.xml'
         );
 
@@ -425,7 +468,7 @@ trait PublicationParser
         $newSubmissionFile->setData('assocType', Application::ASSOC_TYPE_PUBLICATION);
         $newSubmissionFile->setData('assocId', $publication->getId());
 
-        $submissionFileId = Repo::submissionFile()->add($newSubmissionFile);
+        Repo::submissionFile()->add($newSubmissionFile);
 
         /** @var DOMElement $asset */
         foreach ($this->select('//asset|//graphic') as $asset) {
@@ -632,6 +675,7 @@ trait PublicationParser
             /** @var PKPFileService $fileService */
             $fileService = Services::get('file');
 
+            $content = $this->replaceExternalReferences(file_get_contents($file->getPathname()));
             $requiredFiles = [];
             $content = preg_replace_callback('/src="([^"]*)"/', function ($match) use ($file, &$requiredFiles) {
                 [$match, $src] = $match;
@@ -651,7 +695,7 @@ trait PublicationParser
                 }
                 $requiredFiles[] = $realPath;
                 return str_replace($src, basename($realPath), $match);
-            }, file_get_contents($file->getPathname()));
+            }, $content);
 
             $content = preg_replace_callback('/href="([^"]*)"/', function ($href) use ($content) {
                 if (filter_var($href[1], FILTER_VALIDATE_EMAIL, FILTER_FLAG_EMAIL_UNICODE)) {
@@ -718,6 +762,10 @@ trait PublicationParser
      */
     private function _processCategories(Publication $publication): void
     {
+        if (!$this->getConfiguration()->useCategoryAsSection()) {
+            return;
+        }
+
         $categoryIds = [];
         /** @var DOMElement $node */
         foreach ($this->select('front/article-meta/article-categories/subj-group') as $node) {

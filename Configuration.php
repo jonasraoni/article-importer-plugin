@@ -60,7 +60,8 @@ class Configuration
     private bool $_hasVolume = true;
     /** @var bool Whether the number (issue) folder level is present in the import structure */
     private bool $_hasNumber = true;
-
+    /** @var bool Whether to preload the HTML from the ORE database */
+    private bool $_preloadHtml = false;
     /**
      * Constructor
      *
@@ -76,8 +77,9 @@ class Configuration
      * @param bool $hasVersion Whether the import structure includes a version folder level
      * @param bool $hasVolume Whether the import structure includes a volume folder level
      * @param bool $hasNumber Whether the import structure includes a number (issue) folder level
+     * @param bool $preloadHtml Whether to preload the HTML from the ORE database
      */
-    public function __construct(array $parsers, string $contextPath, string $username, string $editorUsername, string $email, string $importPath, string $defaultSectionName = 'Articles', bool $generateHtml = true, bool $useCategoryAsSection = false, bool $hasVersion = true, bool $hasVolume = true, bool $hasNumber = true)
+    public function __construct(array $parsers, string $contextPath, string $username, string $editorUsername, string $email, string $importPath, string $defaultSectionName = 'Articles', bool $generateHtml = true, bool $useCategoryAsSection = false, bool $hasVersion = true, bool $hasVolume = true, bool $hasNumber = true, bool $preloadHtml = false)
     {
         $this->_defaultSectionName = $defaultSectionName;
         $this->_parsers = $parsers;
@@ -86,6 +88,7 @@ class Configuration
         $this->_hasVersion = $hasVersion;
         $this->_hasVolume = $hasVolume;
         $this->_hasNumber = $hasNumber;
+        $this->_preloadHtml = $preloadHtml;
         if (!$this->_context = Application::getContextDAO()->getByPath($contextPath)) {
             throw new InvalidArgumentException(__('plugins.importexport.articleImporter.unknownJournal', ['journal' => $contextPath]));
         }
@@ -325,5 +328,13 @@ class Configuration
     public function shouldGenerateHtml(): bool
     {
         return $this->_generateHtml;
+    }
+
+    /**
+     * Retrieves whether the HTML should be preloaded from the ORE database
+     */
+    public function shouldPreloadHtml(): bool
+    {
+        return $this->_preloadHtml;
     }
 }

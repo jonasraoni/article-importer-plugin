@@ -122,7 +122,7 @@ abstract class BaseParser
     {
         try {
             $this
-                ->_ensureMetadataIsValidAndParse()
+                ->ensureMetadataIsValidAndParse()
                 ->_ensureSubmissionDoesNotExist()
                 ->getPublication();
         } catch (Throwable $e) {
@@ -132,14 +132,28 @@ abstract class BaseParser
     }
 
     /**
+     * Replaces the URLs in the XML and HTML files by the local file names
+     */
+    public function replaceExternalReferences(string $content) {
+        // Get all image files in the images folder
+        $resources = array_map('basename', glob($this->getArticleVersion()->getPath()->getRealPath() . '/*'));
+        // Replace the URLs in the content
+        foreach ($resources as $filename) {
+            $content = preg_replace('/\bhttps?:\/\/[^\s]*?' . preg_quote($filename, '/') . '\b/i', $filename, $content);
+        }
+
+        return $content;
+    }
+
+    /**
      * Validates the metadata file and try to parse the XML
      *
      * @throws Exception Throws when there's an error to parse the XML
      */
-    private function _ensureMetadataIsValidAndParse(): static
+    public function ensureMetadataIsValidAndParse(): static
     {
         $document = new DOMDocument('1.0', 'utf-8');
-        if (!$document->load($this->_version->getMetadataFile()->getPathname())) {
+        if (!$document->loadXML($this->replaceExternalReferences(file_get_contents($this->_version->getMetadataFile()->getPathname())))) {
             throw new Exception(__('plugins.importexport.articleImporter.failedToParseXMLDocument'));
         }
 
