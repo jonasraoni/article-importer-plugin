@@ -749,7 +749,13 @@ trait PublicationParser
         foreach ($this->select('front/article-meta/kwd-group') as $node) {
             $locale = $this->getLocale($node->getAttribute('xml:lang'));
             foreach ($this->select('kwd', $node) as $node) {
-                $keywords[$locale][] = $this->selectText('.', $node);
+                $keywords = preg_split('/;|,/', $this->selectText('.', $node));
+                foreach ($keywords as $keyword) {
+                    $keyword = trim($keyword);
+                    if ($keyword) {
+                        $keywords[$locale][] = $keyword;
+                    }
+                }
             }
         }
         if (count($keywords)) {
