@@ -35,6 +35,7 @@ use PKP\submissionFile\enums\MediaVariantType;
 use PKP\submissionFile\SubmissionFile;
 use APP\facades\Repo;
 use PKP\controlledVocab\ControlledVocab;
+use PKP\submissionFile\VariantGroup;
 use SplFileInfo;
 use XSLTProcessor;
 
@@ -483,15 +484,22 @@ trait PublicationParser
     /**
      * Creates a dependent file
      */
-    protected function _createDependentFile(Submission $submission, int $userId, Publication $publication, string $filePath)
+    protected function _createDependentFile(Submission $submission, int $userId, Publication $publication, string $filePath, ?int $variantGroupId = null)
     {
         if ($this->_dependentFiles[$filePath] ?? false) {
             return;
         }
 
+        $extension = pathinfo($filePath, PATHINFO_EXTENSION);
+        if ($extension === 'gif' && file_exists($tifFilePath = preg_replace('/gif$/', 'tif', $filePath))) {
+            $variantGroup = static::create([]);
+            $variantGroupId = $variantGroup->getKey();
+            $this->_createDependentFile($submission, $userId, $publication, $tifFilePath, $variantGroupId);
+        }
+
         $this->_dependentFiles[$filePath] = true;
-        $filename = basename($filePath);
-        $fileType = pathinfo($filePath, PATHINFO_EXTENSION);
+        $filename = basename($filePath . '.' . $extension);
+        $fileType = $extension;
         $genreId = $this->getCachedGenre($fileType)->getId();
         /** @var PKPFileService $fileService */
         $fileService = Services::get('file');
@@ -515,6 +523,10 @@ trait PublicationParser
         $newSubmissionFile->setData('credit', '');
         $newSubmissionFile->setData('copyrightOwner', '');
         $newSubmissionFile->setData('terms', '');
+        if ($variantGroupId) {
+            $newSubmissionFile->setData('variantGroupId', $variantGroupId);
+            $newSubmissionFile->setData('variantType', MediaVariantType::HIGH_RESOLUTION);
+        }
         $newSubmissionFile->setData('variantType', MediaVariantType::WEB);
         Repo::submissionFile()->add($newSubmissionFile);
     }
