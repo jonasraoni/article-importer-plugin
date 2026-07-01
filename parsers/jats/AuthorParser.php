@@ -76,7 +76,10 @@ trait AuthorParser
         $lastName = $this->selectText('surname', $node);
         $prefix = $this->selectText('prefix', $node);
         $suffix = $this->selectText('suffix', $node);
-        $collab = $this->selectText('collab', $authorNode);
+        $collab = '';
+        foreach ($this->select('collab/text()', $authorNode) as $textNode) {
+            $collab .= $textNode->nodeValue;
+        }
         if ($lastName && !$firstName) {
             $firstName = $lastName;
             $lastName = '';
