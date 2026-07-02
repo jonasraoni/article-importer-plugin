@@ -1787,6 +1787,16 @@ class OreImporter
         $user->setInlineHelp(1);
         $user->setPassword(Validation::encryptCredentials($email, Str::random(16)));
 
+        // Backfill ORCID and affiliation from an existing author with the same email.
+        // This covers at least the author participant; richer source data is currently obfuscated.
+        [$orcidData, $affiliation] = $this->getReviewerIdentityFromAuthor($email);
+        if ($orcidData) {
+            $user->setVerifiedOrcidOAuthData($orcidData);
+        }
+        if ($affiliation) {
+            $user->setAffiliation($affiliation, $this->_locale);
+        }
+
         $userId = Repo::user()->add($user);
         if (!$userId) {
             return null;

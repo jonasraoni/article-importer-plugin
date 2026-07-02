@@ -492,7 +492,7 @@ trait PublicationParser
 
         $extension = pathinfo($filePath, PATHINFO_EXTENSION);
         if ($extension === 'gif' && file_exists($tifFilePath = preg_replace('/gif$/', 'tif', $filePath))) {
-            $variantGroup = static::create([]);
+            $variantGroup = VariantGroup::create([]);
             $variantGroupId = $variantGroup->getKey();
             $this->_createDependentFile($submission, $userId, $publication, $tifFilePath, $variantGroupId);
         }
@@ -523,11 +523,10 @@ trait PublicationParser
         $newSubmissionFile->setData('credit', '');
         $newSubmissionFile->setData('copyrightOwner', '');
         $newSubmissionFile->setData('terms', '');
+        $newSubmissionFile->setData('variantType', $extension == 'tif' ? MediaVariantType::HIGH_RESOLUTION : MediaVariantType::WEB);
         if ($variantGroupId) {
             $newSubmissionFile->setData('variantGroupId', $variantGroupId);
-            $newSubmissionFile->setData('variantType', MediaVariantType::HIGH_RESOLUTION);
         }
-        $newSubmissionFile->setData('variantType', MediaVariantType::WEB);
         Repo::submissionFile()->add($newSubmissionFile);
     }
 
