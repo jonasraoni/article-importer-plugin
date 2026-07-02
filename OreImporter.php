@@ -1291,33 +1291,37 @@ class OreImporter
         $articleId = array_slice($doiParts, -2, 1)[0];
 
         // Execute the query to get all reviews
-        $reviews = $this->_connection->table('f1000r_version as v')
-            ->join('f1000r_report as r', 'r.version_id', '=', 'v.id')
-            ->join('f1000r_referee_report as rr', 'rr.report_id', '=', 'r.id')
-            ->join('f1000r_referee as re', 're.id', '=', 'rr.referee_id')
-            ->leftJoin('f1000r_affiliation as a', 'a.id', '=', 're.affiliation_id')
-            ->leftJoin('f1000r_article_referee as ar', 'ar.id', '=', 'rr.article_referee_id')
-            ->leftJoin('f1000r_referee as re2', 're2.id', '=', 'ar.referee_id')
-            ->leftJoin('f1000r_article_referee_affiliation as ara', 'ara.article_referee_id', '=', 'ar.id')
-            ->where('v.article_id', $articleId)
-            ->whereNotNull('r.decision')
-            ->where('r.status', 'PUBLISHED')
-            ->select([
-                're.first_name',
-                're.last_name',
-                're.email',
-                'r.comment',
-                'r.published_date',
-                'r.decision',
-                'v.id as version_id',
-                'r.id as review_id',
-                'v.version_number',
-                'r.doi'
-            ])
-            ->orderBy('v.id')
-            ->orderBy('r.id')
-            ->orderBy('rr.position')
-            ->get();
+        $reviews = $this->_connection->select(
+            "SELECT
+                STRING_AGG(COALESCE(re2.first_name,'') || ' ' || COALESCE(re2.last_name, ''), CHR(13) ORDER BY rr2.position) AS coreferees,
+                re.first_name,
+                re.last_name,
+                re.email,
+                r.comment,
+                r.published_date,
+                r.decision,
+                v.id AS version_id,
+                r.id AS review_id,
+                v.version_number,
+                r.doi
+            FROM f1000r_version AS v
+            JOIN f1000r_report AS r ON r.version_id = v.id
+            JOIN f1000r_referee_report AS rr ON rr.report_id = r.id AND rr.is_coreferee = false
+            JOIN f1000r_referee AS re ON re.id = rr.referee_id
+            LEFT JOIN f1000r_affiliation AS a ON a.id = re.affiliation_id
+            LEFT JOIN f1000r_article_referee AS ar ON ar.id = rr.article_referee_id
+            LEFT JOIN f1000r_article_referee_affiliation AS ara ON ara.article_referee_id = ar.id
+            LEFT JOIN f1000r_referee_report AS rr2 ON rr2.report_id = r.id AND rr2.is_coreferee = true
+            LEFT JOIN f1000r_referee AS re2 ON re2.id = rr2.referee_id
+            WHERE v.article_id = ?
+            AND r.decision IS NOT NULL
+            AND r.status = 'PUBLISHED'
+            GROUP BY
+                re.first_name, re.last_name, re.email,
+                r.comment, r.published_date, r.decision,
+                v.id, r.id, v.version_number, r.doi, rr.position
+            ORDER BY v.id, r.id, rr.position
+        ", [$articleId]);
 
         if (empty($reviews)) {
             return;
@@ -1495,6 +1499,10 @@ class OreImporter
 
                         $review_assignment_id = Repo::reviewAssignment()->add($review_assignment);
                         $review_assignment = Repo::reviewAssignment()->get($review_assignment_id);
+                    }
+
+                    if (!trim($review_record->coreferees)) {
+                        $review_record->comment = 'The review was co-authored by:<br>' . implode('<br>', explode(chr(13), $review_record->coreferees)) . '<br><br>' . $review_record->comment;
                     }
 
                     // Create review comment if provided
