@@ -1505,6 +1505,28 @@ class OreImporter
                         $review_record->comment = 'The review was co-authored by:<br>' . implode('<br>', explode(chr(13), $review_record->coreferees)) . '<br><br>' . $review_record->comment;
                     }
 
+
+                    $questions = $this->_connection->select("select
+                        q.question_description,
+                        CASE r.result
+                            WHEN 'np' THEN 'Not applicable'
+                            WHEN 'y' THEN 'Yes'
+                            WHEN 'p' THEN 'Partly'
+                            WHEN 'n' THEN 'No'
+                            WHEN 'd' THEN 'No source data required'
+                            WHEN 'nc' THEN 'I cannot comment. A qualified statistician is required'
+                        END AS result
+                    from f1000r_article_question_result r
+                    inner join f1000r_article_question q on q.id = r.question_id
+                    inner join f1000r_version v on v.id = r.version_id
+                    where r.version_id = ?
+                    order by q.position
+                    ", [$review_record->version_id]);
+                    $questions = array_map(fn ($question) => "<strong>{$question->question_description}</strong><br>{$question->result}", $questions);
+                    if (!empty($questions)) {
+                        $review_record->comment = $review_record->comment . '<br><br>' . implode('<br><br>', $questions);
+                    }
+
                     // Create review comment if provided
                     if (!empty($review_record->comment)) {
                         $submission_comment_dao = DAORegistry::getDAO('SubmissionCommentDAO'); /** @var SubmissionCommentDAO $submission_comment_dao */
