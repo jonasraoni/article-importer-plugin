@@ -132,7 +132,7 @@ class Configuration
         $genreDao = DAORegistry::getDAO('GenreDAO');
         $this->_genre = $genreDao->getByKey('SUBMISSION', $this->_context->getId());
 
-        $this->_imageExt = ['tif', 'tiff', 'png', 'jpg', 'jpeg'];
+        $this->_imageExt = ['tif', 'tiff', 'png', 'jpg', 'jpeg', 'gif'];
         $this->_coverFilename = 'cover';
     }
 
