@@ -1501,10 +1501,9 @@ class OreImporter
                         $review_assignment = Repo::reviewAssignment()->get($review_assignment_id);
                     }
 
-                    if (!trim($review_record->coreferees)) {
+                    if (trim($review_record->coreferees)) {
                         $review_record->comment = 'The review was co-authored by:<br>' . implode('<br>', explode(chr(13), $review_record->coreferees)) . '<br><br>' . $review_record->comment;
                     }
-
 
                     $questions = $this->_connection->select("select
                         q.question_description,

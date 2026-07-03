@@ -498,7 +498,7 @@ trait PublicationParser
         }
 
         $this->_dependentFiles[$filePath] = true;
-        $filename = basename($filePath . '.' . $extension);
+        $filename = basename($filePath);
         $fileType = $extension;
         $genreId = $this->getCachedGenre($fileType)->getId();
         /** @var PKPFileService $fileService */
@@ -779,7 +779,7 @@ trait PublicationParser
      */
     private function _processCategories(Publication $publication): void
     {
-        if (!$this->getConfiguration()->useCategoryAsSection()) {
+        if ($this->getConfiguration()->useCategoryAsSection()) {
             return;
         }
 
