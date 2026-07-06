@@ -523,7 +523,7 @@ trait PublicationParser
         $newSubmissionFile->setData('credit', '');
         $newSubmissionFile->setData('copyrightOwner', '');
         $newSubmissionFile->setData('terms', '');
-        $newSubmissionFile->setData('variantType', $extension == 'tif' ? MediaVariantType::HIGH_RESOLUTION : MediaVariantType::WEB);
+        $newSubmissionFile->setData('variantType', $extension == 'tif' ? MediaVariantType::HIGH_RESOLUTION->value : MediaVariantType::WEB->value);
         if ($variantGroupId) {
             $newSubmissionFile->setData('variantGroupId', $variantGroupId);
         }
