@@ -13,6 +13,7 @@
 namespace APP\plugins\importexport\articleImporter\parsers\jats;
 
 use APP\plugins\importexport\articleImporter\EntityManager;
+use APP\plugins\importexport\articleImporter\Funders;
 use APP\publication\enums\VersionStage;
 use APP\submission\Submission;
 use DateTimeImmutable;
@@ -144,12 +145,15 @@ trait PublicationParser
         $publication->setData('copyrightYear', $this->selectText('front/article-meta/permissions/copyright-year') ?: $publicationDate->format('Y'));
         $publication->setData('licenseUrl', $this->selectText('front/article-meta/permissions/license/attribute::xlink:href'));
 
+        $this->_processFundingGroup($publication);
+
         $publication = $this->_processCitations($publication);
         $this->setPublicationCoverImage($publication);
         $this->_processCategories($publication);
 
         // Inserts the publication and updates the submission
         Repo::publication()->add($publication);
+        $this->_processFundingAwardGroups($publication);
         $this->_processKeywords($publication);
         // Reload object with keywords (otherwise they will be cleared later on)
         $publication = Repo::publication()->get($publication->getId());
@@ -200,6 +204,70 @@ trait PublicationParser
             $publication->setData('citationsRaw', $citations);
         }
         return $publication;
+    }
+
+    /**
+     * Parse funding-group: set fundingStatement on publication (localized).
+     */
+    private function _processFundingGroup(Publication $publication): void
+    {
+        $values = [];
+        $locale = null;
+        /** @var DOMElement $node */
+        foreach ($this->select('front/article-meta/funding-group/funding-statement') as $node) {
+            $value = trim($this->getTextContent($node, function ($node, $content) {
+                // Transforms the known tags, the remaining ones will be stripped
+                $tag = [
+                    'title' => 'strong',
+                    'italic' => 'em',
+                    'sub' => 'sub',
+                    'sup' => 'sup',
+                    'p' => 'p'
+                ][$node->nodeName] ?? null;
+                return $tag ? "<{$tag}>{$content}</{$tag}>" : $content;
+            }));
+            if ($value !== '') {
+                $locale = $this->getLocale($node->getAttribute('xml:lang'));
+                $values[] = "<p>{$value}</p>";
+            }
+        }
+        if (count($values)) {
+            $publication->setData('fundingStatement', implode("\n", $values), $locale);
+        }
+    }
+
+    /**
+     * Create funders and awards from JATS award-group nodes (Funding plugin). Submission-level.
+     */
+    private function _processFundingAwardGroups(Publication $publication): void
+    {
+        $awardGroups = [];
+        /** @var DOMElement $awardGroup */
+        foreach ($this->select('front/article-meta/funding-group/award-group') as $awardGroup) {
+            $funderName = $this->selectText('funding-source', $awardGroup);
+            $funderIdentification = $this->selectText('attribute::xlink:href', $awardGroup);
+            $awardIds = [];
+            foreach ($this->select('award-id', $awardGroup) as $awardIdNode) {
+                $id = trim($awardIdNode->textContent ?? '');
+                if ($id !== '') {
+                    $awardIds[] = $id;
+                }
+            }
+            if ($funderName !== '') {
+                $awardGroups[] = [
+                    'funderName' => $funderName,
+                    'funderIdentification' => $funderIdentification,
+                    'awardNumbers' => $awardIds,
+                ];
+            }
+        }
+        if (count($awardGroups)) {
+            Funders::createFundersFromAwardGroups(
+                $awardGroups,
+                $publication->getData('submissionId'),
+                $this->getContextId()
+            );
+        }
     }
 
     /**
