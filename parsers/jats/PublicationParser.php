@@ -439,7 +439,7 @@ trait PublicationParser
         $file = $this->getArticleVersion()->getMetadataFile();
         $filename = $file->getPathname();
 
-        $genreId = Genre::GENRE_CATEGORY_DOCUMENT;
+        $genreId = $this->getConfiguration()->getSubmissionGenre()->getId();
         $fileStage = SubmissionFile::SUBMISSION_FILE_JATS;
         $userId = $this->getConfiguration()->getUser()->getId();
 
