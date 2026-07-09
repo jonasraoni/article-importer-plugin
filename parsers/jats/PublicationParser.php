@@ -44,6 +44,7 @@ trait PublicationParser
     use EntityManager;
 
     private ?Publication $_publication = null;
+    private array $_dependentFiles = [];
 
     /**
      * Parse, import and retrieve the publication
@@ -762,8 +763,7 @@ trait PublicationParser
         foreach ($this->select('front/article-meta/kwd-group') as $node) {
             $locale = $this->getLocale($node->getAttribute('xml:lang'));
             foreach ($this->select('kwd', $node) as $node) {
-                $keywords = preg_split('/;|,/', $this->selectText('.', $node));
-                foreach ($keywords as $keyword) {
+                foreach (preg_split('/;|,/', $this->selectText('.', $node)) as $keyword) {
                     $keyword = trim($keyword);
                     if ($keyword) {
                         $keywords[$locale][] = $keyword;
