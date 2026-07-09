@@ -11,22 +11,6 @@
 
  */
 
-/*
-SELECT 'SELECT ' ||
--- STRING_AGG(column_name, ', ')
-quote_literal(table_name)
-|| ' FROM ' || table_name || ' WHERE ' ||
-STRING_AGG('"' || column_name || '"' || ' ILIKE ' || quote_literal('%0000-0002-6769-1999%'), ' OR ') || ' UNION '
-FROM information_schema.columns
-WHERE data_type IN ('character', 'text', 'character varying') AND table_schema = 'public'
-GROUP BY table_name;
-
-SELECT table_name
-FROM information_schema.tables
-WHERE table_schema = 'public'
-and table_name ilike '%contributor_role%';
-*/
-
 namespace APP\plugins\importexport\articleImporter;
 
 use APP\author\Author;
@@ -1303,7 +1287,9 @@ class OreImporter
                 v.id AS version_id,
                 r.id AS review_id,
                 v.version_number,
-                r.doi
+                r.doi,
+                r.areas_of_research,
+                r.competing_interests
             FROM f1000r_version AS v
             JOIN f1000r_report AS r ON r.version_id = v.id
             JOIN f1000r_referee_report AS rr ON rr.report_id = r.id AND rr.is_coreferee = false
@@ -1466,6 +1452,7 @@ class OreImporter
                         Repo::reviewAssignment()->edit($existing_assignment, [
                             'round' => (int) $review_record->version_number,
                             'reviewerRecommendationId' => $reviewer_recommendation_id,
+                            'competingInterests' => $review_record->competing_interests,
                             'dateCompleted' => $review_record->published_date
                                 ? $this->parseDateString($review_record->published_date)?->format(static::DATETIME_FORMAT)
                                 : Core::getCurrentDate(),
@@ -1523,7 +1510,11 @@ class OreImporter
                     ", [$review_record->version_id]);
                     $questions = array_map(fn ($question) => "<strong>{$question->question_description}</strong><br>{$question->result}", $questions);
                     if (!empty($questions)) {
-                        $review_record->comment = $review_record->comment . '<br><br>' . implode('<br><br>', $questions);
+                        $review_record->comment .= '<br><br>' . implode('<br><br>', $questions);
+                    }
+
+                    if (trim($review_record->areas_of_research)) {
+                        $review_record->comment .= '<br><br>' . '<strong>Reviewer Expertise:</strong><br>' . $review_record->areas_of_research;
                     }
 
                     // Create review comment if provided
