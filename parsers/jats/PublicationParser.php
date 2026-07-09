@@ -402,31 +402,33 @@ trait PublicationParser
      */
     private function _processFundingAwardGroups(Publication $publication): void
     {
-        $award_groups = [];
+        $awardGroups = [];
         /** @var DOMElement $awardGroup */
         foreach ($this->select('front/article-meta/funding-group/award-group') as $awardGroup) {
-            $funder_name = $this->selectText('funding-source', $awardGroup);
-            $funder_identification = $this->selectText('attribute::xlink:href', $awardGroup);
-            $award_ids = [];
+            $funderName = $this->selectText('funding-source', $awardGroup);
+            $funderIdentification = $this->selectText('attribute::xlink:href', $awardGroup);
+            $awardIds = [];
             foreach ($this->select('award-id', $awardGroup) as $awardIdNode) {
                 $id = trim($awardIdNode->textContent ?? '');
                 if ($id !== '') {
-                    $award_ids[] = $id;
+                    $awardIds[] = $id;
                 }
             }
-            if ($funder_name !== '') {
-                $award_groups[] = [
-                    'funderName' => $funder_name,
-                    'funderIdentification' => $funder_identification,
-                    'awardNumbers' => $award_ids,
+            // Keep the group when it carries anything usable: a name, an identifier (Fundref/ROR
+            // resolvable downstream), or award numbers.
+            if ($funderName !== '' || $funderIdentification !== '' || $awardIds !== []) {
+                $awardGroups[] = [
+                    'funderName' => $funderName,
+                    'funderIdentification' => $funderIdentification,
+                    'awardNumbers' => $awardIds,
                 ];
             }
         }
-        if ($award_groups !== []) {
+        if (count($awardGroups)) {
             Funders::createFundersFromAwardGroups(
-                $award_groups,
+                $awardGroups,
                 $publication->getData('submissionId'),
-                $this->getContextId()
+                $this->getLocale()
             );
         }
     }
