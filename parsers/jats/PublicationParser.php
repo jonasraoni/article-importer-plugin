@@ -253,7 +253,9 @@ trait PublicationParser
                     $awardIds[] = $id;
                 }
             }
-            if ($funderName !== '') {
+            // Keep the group when it carries anything usable: a name, an identifier (Fundref/ROR
+            // resolvable downstream), or award numbers.
+            if ($funderName !== '' || $funderIdentification !== '' || $awardIds !== []) {
                 $awardGroups[] = [
                     'funderName' => $funderName,
                     'funderIdentification' => $funderIdentification,
@@ -265,7 +267,7 @@ trait PublicationParser
             Funders::createFundersFromAwardGroups(
                 $awardGroups,
                 $publication->getData('submissionId'),
-                $this->getContextId()
+                $this->getLocale()
             );
         }
     }
