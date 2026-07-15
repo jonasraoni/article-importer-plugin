@@ -1266,12 +1266,20 @@ class OreImporter
     {
 
         $publications = $submission->getPublishedPublications();
-        $doi = $submission->getCurrentPublication()->getDoi();
-        if (!$doi) {
+        $bestDoi = null;
+        foreach ($publications as $publication) {
+            $bestDoi = $publication->getDoi();
+            // Attempt to look for a DOI created by ORE
+            if (mb_stripos($bestDoi, 'europe') !== false) {
+                break;
+            }
+        }
+
+        if (!$bestDoi) {
             return;
         }
 
-        $doiParts = explode('.', $doi);
+        $doiParts = explode('.', $bestDoi);
         $articleId = array_slice($doiParts, -2, 1)[0];
 
         // Execute the query to get all reviews
