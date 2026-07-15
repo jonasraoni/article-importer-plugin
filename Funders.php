@@ -39,7 +39,11 @@ class Funders
      */
     public static function createFundersFromAwardGroups(array $awardGroups, int $submissionId, string $locale): void
     {
-        $seq = 0;
+        Funder::withSubmissionId($submissionId)->delete();
+
+        // Merge award groups that refer to the same funder (same ROR, or same name when there's no ROR)
+        // so a funder appears once with all of its grants combined (grant numbers de-duplicated).
+        $funders = [];
         foreach ($awardGroups as $group) {
             $funderName = trim($group['funderName'] ?? '');
             $funderIdentification = trim($group['funderIdentification'] ?? '');
@@ -62,28 +66,49 @@ class Funders
                 continue;
             }
 
-            $grants = array_values(array_filter(array_map(
-                fn ($number) => ($number = trim((string) $number)) === ''
-                    ? null
-                    : ['grantNumber' => $number, 'grantName' => null, 'grantDoi' => null],
-                $awardNumbers
-            )));
+            // Identity: ROR when resolved, otherwise name + Fundref ID together, so that funders sharing
+            // a name but carrying different Fundref IDs are treated as distinct (and their IDs preserved).
+            $key = $ror !== null
+                ? "ror@{$ror}"
+                : 'name@' . mb_strtolower($funderName) . '@' . ($fundrefId ?? '');
+            if (!isset($funders[$key])) {
+                $funders[$key] = [
+                    'ror' => $ror,
+                    'name' => $funderName,
+                    'fundrefId' => $fundrefId,
+                    'grants' => [],
+                    'grantNumbers' => [],
+                ];
+            }
 
+            foreach ($awardNumbers as $number) {
+                $number = trim((string) $number);
+                if ($number === '' || isset($funders[$key]['grantNumbers'][$number])) {
+                    continue;
+                }
+                $funders[$key]['grantNumbers'][$number] = true;
+                $funders[$key]['grants'][] = ['grantNumber' => $number, 'grantName' => null, 'grantDoi' => null];
+            }
+        }
+
+        $seq = 0;
+        foreach ($funders as $data) {
+            $ror = $data['ror'];
             $funder = Funder::create([
                 'submissionId' => $submissionId,
                 'ror' => $ror ?: null,
-                'name' => $ror ? [] : [$locale => $funderName],
-                'grants' => $grants,
+                'name' => $ror ? [] : [$locale => $data['name']],
+                'grants' => $data['grants'],
                 'seq' => $seq++,
             ]);
 
             // Preserve the original Fundref ID when no ROR match, so it can still be exported downstream
-            if (!$ror && $fundrefId) {
+            if (!$ror && $data['fundrefId']) {
                 DB::table('funder_settings')->insert([
                     'funder_id' => $funder->id,
                     'locale' => '',
                     'setting_name' => 'fundrefId',
-                    'setting_value' => $fundrefId,
+                    'setting_value' => $data['fundrefId'],
                 ]);
             }
         }
