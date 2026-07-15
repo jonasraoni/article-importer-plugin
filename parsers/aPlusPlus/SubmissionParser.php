@@ -32,7 +32,7 @@ trait SubmissionParser
         $submission->setData('status', Submission::STATUS_PUBLISHED);
         $submission->setData('submissionProgress', '');
         $submission->setData('stageId', WORKFLOW_STAGE_ID_PRODUCTION);
-        $submission->setData('sectionId', $this->getSection()->getId());
+        $submission->setData('locale', $this->getLocale());
         $date = $this->getDateFromNode($this->selectFirst('Journal/Volume/Issue/Article/ArticleInfo/ArticleHistory/RegistrationDate')) ?: $this->getPublicationDate()->add(new DateInterval('P1D'));
         $submission->setData('dateSubmitted', $date->format(static::DATETIME_FORMAT));
         // Creates the submission
