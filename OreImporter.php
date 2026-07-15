@@ -1289,13 +1289,14 @@ class OreImporter
                 v.version_number,
                 r.doi,
                 r.areas_of_research,
-                r.competing_interests
+                r.competing_interests,
+                ar.id AS article_referee_id
             FROM f1000r_version AS v
             JOIN f1000r_report AS r ON r.version_id = v.id
             JOIN f1000r_referee_report AS rr ON rr.report_id = r.id AND rr.is_coreferee = false
             JOIN f1000r_referee AS re ON re.id = rr.referee_id
             LEFT JOIN f1000r_affiliation AS a ON a.id = re.affiliation_id
-            LEFT JOIN f1000r_article_referee AS ar ON ar.id = rr.article_referee_id
+            LEFT JOIN f1000r_article_referee AS ar ON ar.article_id = v.article_id and ar.referee_id = rr.referee_id
             LEFT JOIN f1000r_article_referee_affiliation AS ara ON ara.article_referee_id = ar.id
             LEFT JOIN f1000r_referee_report AS rr2 ON rr2.report_id = r.id AND rr2.is_coreferee = true
             LEFT JOIN f1000r_referee AS re2 ON re2.id = rr2.referee_id
@@ -1305,7 +1306,7 @@ class OreImporter
             GROUP BY
                 re.first_name, re.last_name, re.email,
                 r.comment, r.published_date, r.decision,
-                v.id, r.id, v.version_number, r.doi, rr.position
+                v.id, r.id, v.version_number, r.doi, rr.position, ar.id
             ORDER BY v.id, r.id, rr.position
         ", [$articleId]);
 
@@ -1479,6 +1480,7 @@ class OreImporter
                             'dateConfirmed' => Core::getCurrentDate(),
                             'dateAcknowledged' => Core::getCurrentDate(),
                             'reviewerRecommendationId' => $reviewer_recommendation_id,
+                            'competingInterests' => $review_record->competing_interests,
                             'reviewMethod' => ReviewAssignment::SUBMISSION_REVIEW_METHOD_OPEN,
                             'isReviewPubliclyVisible' => 1,
                             'doiId' => $doi?->getId()
@@ -1489,7 +1491,7 @@ class OreImporter
                     }
 
                     if (trim($review_record->coreferees)) {
-                        $review_record->comment = 'The review was co-authored by:<br>' . implode('<br>', explode(chr(13), $review_record->coreferees)) . '<br><br>' . $review_record->comment;
+                        $review_record->comment = '<strong>The review was co-authored by:</strong><br>' . implode('<br>', explode(chr(13), $review_record->coreferees)) . '<br><br>' . $review_record->comment;
                     }
 
                     $questions = $this->_connection->select("select
@@ -1506,8 +1508,9 @@ class OreImporter
                     inner join f1000r_article_question q on q.id = r.question_id
                     inner join f1000r_version v on v.id = r.version_id
                     where r.version_id = ?
+                    and r.article_referee_id = ?
                     order by q.position
-                    ", [$review_record->version_id]);
+                    ", [$review_record->version_id, $review_record->article_referee_id]);
                     $questions = array_map(fn ($question) => "<strong>{$question->question_description}</strong><br>{$question->result}", $questions);
                     if (!empty($questions)) {
                         $review_record->comment .= '<br><br>' . implode('<br><br>', $questions);
