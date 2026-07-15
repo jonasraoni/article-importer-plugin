@@ -18,6 +18,8 @@ use APP\publication\Publication;
 use APP\facades\Repo;
 use DOMElement;
 use DOMNode;
+use Exception;
+use PKP\author\contributorRole\ContributorRole;
 
 trait AuthorParser
 {
@@ -29,6 +31,15 @@ trait AuthorParser
      */
     private function _processAuthors(Publication $publication): void
     {
+        static $correspondingAuthorRole = null,$coAuthorRole = null;
+        $correspondingAuthorRole ??= ContributorRole::query()
+            ->withContextId($this->getContextId())
+            ->where('name', 'Corresponding Author')
+            ->first() ?? throw new Exception('Corresponding Author contributor role not found');
+        $coAuthorRole ??= ContributorRole::query()
+            ->withContextId($this->getContextId())
+            ->where('name', 'Co-Author')
+            ->first() ?? throw new Exception('Co-Author contributor role not found');
         $doi = $this->getPublicIds()['doi'] ?? null;
         $doi = explode('.', $doi);
         $version = array_pop($doi);
@@ -45,11 +56,11 @@ trait AuthorParser
             ->all();
 
         $firstCorrespYesAuthor = $firstCorrespNotNoAuthor = null;
-        $hasAuthor = false;
+        $authors = [];
         foreach ($this->select("front/article-meta/contrib-group[@content-type='authors']/contrib|front/article-meta/contrib-group/contrib[@contrib-type='author']") as $node) {
             $databaseEmail = array_shift($databaseEmails);
             $author = $this->_processAuthor($publication, $node, $databaseEmail);
-            $hasAuthor = true;
+            $authors[] = $author;
             $corresp = mb_strtolower(trim($node->getAttribute('corresp') ?? ''));
             if ($corresp === 'yes' && !$firstCorrespYesAuthor) {
                 $firstCorrespYesAuthor = $author;
@@ -59,9 +70,16 @@ trait AuthorParser
             }
         }
         // If there's no author, a default one will be created
-        $primaryContactAuthor = $hasAuthor ? ($firstCorrespYesAuthor ?? $firstCorrespNotNoAuthor) : $this->_createDefaultAuthor($publication);
-        if ($primaryContactAuthor) {
-            $publication->setData('primaryContactId', $primaryContactAuthor->getId());
+        $primaryContactAuthor = count($authors) ? ($firstCorrespYesAuthor ?? $firstCorrespNotNoAuthor) : ($authors[] = $this->_createDefaultAuthor($publication));
+        $publication->setData('primaryContactId', $primaryContactAuthor->getId());
+        $primaryContactAuthor->setContributorRoles([$correspondingAuthorRole]);
+        Repo::author()->edit($primaryContactAuthor);
+
+        if (count($authors) > 1) {
+            foreach ($authors as $author) {
+                $author->setContributorRoles([$coAuthorRole]);
+                Repo::author()->edit($author);
+            }
         }
     }
 
@@ -174,9 +192,6 @@ trait AuthorParser
         $author->setData('primaryContact', !$this->_authorCount);
         $author->setData('userGroupId', $this->getConfiguration()->getAuthorGroupId());
         $author->setData('creditRoles', $creditRoles);
-        if ($contributorRoles = $this->getCachedContributorRole($this->selectText('@contrib-type', $authorNode))) {
-            $author->setContributorRoles([$contributorRoles]);
-        }
         $authorId = Repo::author()->add($author);
         $author = Repo::author()->get($authorId);
 
