@@ -180,6 +180,9 @@ trait EntityManager
      */
     protected function getCachedContributorRole(string $name): ?ContributorRole
     {
-        return static::$cache['contributorRole'][$name] ?? ContributorRole::where('contributor_role_identifier', $name)->first();
+        return static::$cache['contributorRole'][$name] ?? ContributorRole::where('contributor_role_identifier', $name)
+            ->filterByContextIds([$this->getContextId()])
+            ->getMany()
+            ->first();
     }
 }
