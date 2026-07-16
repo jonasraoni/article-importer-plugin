@@ -31,7 +31,7 @@ if (isset($argv[1]) && $argv[1] === '--cleanup') {
     DB::delete("delete from jobs");
 
     echo "Deleting submissions\n";
-    foreach(DB::select("select distinct p.submission_id from publication_settings ps inner join publications p on p.publication_id = ps.publication_id where ps.setting_name = 'pub-id::publisher-id'") as $row) {
+    foreach (DB::select("select distinct p.submission_id from publication_settings ps inner join publications p on p.publication_id = ps.publication_id where ps.setting_name = 'pub-id::publisher-id'") as $row) {
         try {
             DB::delete("delete from review_assignments where submission_id = ?", [$row->submission_id]);
             DB::delete("delete from review_rounds where submission_id = ?", [$row->submission_id]);
@@ -39,7 +39,7 @@ if (isset($argv[1]) && $argv[1] === '--cleanup') {
             $submission = Repo::submission()->get($row->submission_id);
             echo "Deleting submission: " . $row->submission_id . "\n";
             if ($submission) {
-                for($i = 0; $i < 20; $i++) {
+                for ($i = 0; $i < 20; $i++) {
                     Repo::submission()->delete($submission);
                 }
             }
@@ -142,6 +142,61 @@ try {
                 ['setting_value']
             );
         }
+
+        /**
+         * Looks up an existing author matching the given email and extracts identity
+         * data (all ORCID OAuth fields and a flattened, localized affiliation string)
+         * for reuse on a user.
+         *
+         * @param string $email
+         * @return array{0: array<string, mixed>, 1: ?string} [orcidData, affiliation]
+         */
+        $getReviewerIdentityFromAuthor = function (string $email): array {
+            // Authors store email as a column on the authors table. Prefer the most
+            // recently inserted match, which is most likely to carry complete data.
+            $author_id = DB::table('authors')
+                ->where('email', $email)
+                ->orderByDesc('author_id')
+                ->value('author_id');
+
+            if (!$author_id) {
+                return [[], null];
+            }
+
+            $author = Repo::author()->get($author_id);
+            if (!$author) {
+                return [[], null];
+            }
+
+            // Copy the full set of ORCID fields shared via the HasOrcid trait.
+            $orcidFields = ['orcid', 'orcidIsVerified', 'orcidAccessDenied', 'orcidAccessToken', 'orcidAccessScope', 'orcidRefreshToken', 'orcidAccessExpiresOn'];
+            $orcidData = [];
+            foreach ($orcidFields as $field) {
+                $value = $author->getData($field);
+                if ($value !== null) {
+                    $orcidData[$field] = $value;
+                }
+            }
+
+            $affiliation = $author->getLocalizedAffiliationNamesAsString('en') ?: null;
+
+            return [$orcidData, $affiliation];
+        };
+
+        foreach (Repo::user()->getCollector()->filterByContextIds([$configuration->getContext()->getId()])->getMany() as $user) {
+            // Backfill ORCID and affiliation from an existing author with the same email.
+            // This covers at least the author participant; richer source data is currently obfuscated.
+            [$orcidData, $affiliation] = $getReviewerIdentityFromAuthor($email);
+            if ($orcidData) {
+                $user->setVerifiedOrcidOAuthData($orcidData);
+            }
+            if ($affiliation) {
+                $user->setAffiliation($affiliation, $this->_locale);
+            }
+
+            $userId = Repo::user()->add($user);
+        }
+
         DB::update("UPDATE user_user_groups SET date_start = NULL");
     } elseif (isset($argv[5])) {
         // Import specific article
