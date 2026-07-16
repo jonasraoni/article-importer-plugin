@@ -77,7 +77,7 @@ trait AuthorParser
 
         if (count($authors) > 1) {
             foreach ($authors as $author) {
-                $author->setContributorRoles([$coAuthorRole]);
+                $author->setContributorRoles(array_merge($author->getContributorRoles(), [$coAuthorRole]));
                 Repo::author()->edit($author);
             }
         }

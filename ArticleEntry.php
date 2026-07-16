@@ -159,15 +159,7 @@ class ArticleEntry
             ++$versionMajor;
             if ($passedReview && !$previouslyPassedReview) {
                 $previouslyPassedReview = true;
-                $publication->setVersion(new PublicationVersionInfo(VersionStage::PUBLISHED_MANUSCRIPT_UNDER_REVIEW, $versionMajor, 0));
-                // Publishes the article
-                $doi = $publication->getData('doiObject');
-                $publication->setData('doiObject', null);
-                Repo::publication()->publish($publication);
                 $versionMajor = 1;
-                $publicationId = Repo::publication()->version($publication, VersionStage::VERSION_OF_RECORD, false);
-                $publication = Repo::publication()->get($publicationId);
-                $publication->setData('doiObject', $doi);
             }
 
             $publication->setVersion(new PublicationVersionInfo($passedReview ? VersionStage::VERSION_OF_RECORD : VersionStage::PUBLISHED_MANUSCRIPT_UNDER_REVIEW, $versionMajor, 0));

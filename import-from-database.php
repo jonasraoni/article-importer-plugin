@@ -194,7 +194,7 @@ try {
                 $user->setAffiliation($affiliation, $this->_locale);
             }
 
-            $userId = Repo::user()->add($user);
+            Repo::user()->edit($user);
         }
 
         DB::update("UPDATE user_user_groups SET date_start = NULL");
