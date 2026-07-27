@@ -493,8 +493,9 @@ trait PublicationParser
             return;
         }
 
-        $extension = pathinfo($filePath, PATHINFO_EXTENSION);
-        if ($extension === 'gif' && file_exists($tifFilePath = preg_replace('/gif$/', 'tif', $filePath))) {
+        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        $isImage = in_array($extension, $this->getConfiguration()->getImageExtensions());
+        if ($isImage && $extension === 'gif' && file_exists($tifFilePath = preg_replace('/gif$/', 'tif', $filePath))) {
             $variantGroup = VariantGroup::create([]);
             $variantGroupId = $variantGroup->getKey();
             $this->_createDependentFile($submission, $userId, $publication, $tifFilePath, $variantGroupId);
@@ -513,7 +514,7 @@ trait PublicationParser
         $newSubmissionFile = Repo::submissionFile()->newDataObject();
         $newSubmissionFile->setData('submissionId', $submission->getId());
         $newSubmissionFile->setData('fileId', $newFileId);
-        $newSubmissionFile->setData('fileStage', SubmissionFile::SUBMISSION_FILE_MEDIA);
+        $newSubmissionFile->setData('fileStage', $isImage ? SubmissionFile::SUBMISSION_FILE_MEDIA : SubmissionFile::SUBMISSION_FILE_PROOF);
         $newSubmissionFile->setData('genreId', $genreId);
         $newSubmissionFile->setData('createdAt', Core::getCurrentDate());
         $newSubmissionFile->setData('updatedAt', Core::getCurrentDate());
@@ -526,7 +527,9 @@ trait PublicationParser
         $newSubmissionFile->setData('credit', '');
         $newSubmissionFile->setData('copyrightOwner', '');
         $newSubmissionFile->setData('terms', '');
-        $newSubmissionFile->setData('variantType', $extension == 'tif' ? MediaVariantType::HIGH_RESOLUTION->value : MediaVariantType::WEB->value);
+        if ($isImage) {
+            $newSubmissionFile->setData('variantType', $extension == 'tif' ? MediaVariantType::HIGH_RESOLUTION->value : MediaVariantType::WEB->value);
+        }
         if ($variantGroupId) {
             $newSubmissionFile->setData('variantGroupId', $variantGroupId);
         }
