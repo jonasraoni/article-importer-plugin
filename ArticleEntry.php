@@ -162,6 +162,17 @@ class ArticleEntry
                 $versionMajor = 1;
             }
 
+            $summaryOfChanges = $oreConnection
+                ->table('f1000r_version as v')
+                ->where('v.article_id', $articleId)
+                ->where('v.version_number', $version)
+                ->where('v.status', 'PUBLISHED')
+                ->value('v.update_text');
+
+            if ($summaryOfChanges) {
+                $publication->setData('summaryOfChanges', $summaryOfChanges, 'en');
+            }
+
             $publication->setVersion(new PublicationVersionInfo($passedReview ? VersionStage::VERSION_OF_RECORD : VersionStage::PUBLISHED_MANUSCRIPT_UNDER_REVIEW, $versionMajor, 0));
             // Publishes the article
             Repo::publication()->publish($publication);
