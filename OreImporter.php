@@ -1457,6 +1457,7 @@ class OreImporter
                             'round' => (int) $review_record->version_number,
                             'reviewerRecommendationId' => $reviewer_recommendation_id,
                             'competingInterests' => $review_record->competing_interests,
+                            'competingInterestsDeclared' => 1,
                             'dateCompleted' => $review_record->published_date
                                 ? $this->parseDateString($review_record->published_date)?->format(static::DATETIME_FORMAT)
                                 : Core::getCurrentDate(),
@@ -1483,6 +1484,7 @@ class OreImporter
                             'dateConfirmed' => Core::getCurrentDate(),
                             'dateAcknowledged' => Core::getCurrentDate(),
                             'reviewerRecommendationId' => $reviewer_recommendation_id,
+                            'competingInterestsDeclared' => 1,
                             'competingInterests' => $review_record->competing_interests,
                             'reviewMethod' => ReviewAssignment::SUBMISSION_REVIEW_METHOD_OPEN,
                             'isReviewPubliclyVisible' => 1,
