@@ -186,15 +186,19 @@ try {
         foreach (Repo::user()->getCollector()->filterByContextIds([$configuration->getContext()->getId()])->getMany() as $user) {
             // Backfill ORCID and affiliation from an existing author with the same email.
             // This covers at least the author participant; richer source data is currently obfuscated.
-            [$orcidData, $affiliation] = $getReviewerIdentityFromAuthor($email);
+            [$orcidData, $affiliation] = $getReviewerIdentityFromAuthor($user->getEmail());
+            $updated = false;
             if ($orcidData) {
                 $user->setVerifiedOrcidOAuthData($orcidData);
+                $updated = true;
             }
             if ($affiliation) {
-                $user->setAffiliation($affiliation, $this->_locale);
+                $user->setAffiliation($affiliation, 'en');
+                $updated = true;
             }
-
-            Repo::user()->edit($user);
+            if ($updated) {
+                Repo::user()->edit($user);
+            }
         }
 
         DB::update("UPDATE user_user_groups SET date_start = NULL");
