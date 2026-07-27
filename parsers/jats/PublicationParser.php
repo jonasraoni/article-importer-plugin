@@ -30,12 +30,14 @@ use APP\core\Services;
 use PKP\core\Core;
 use APP\core\Application;
 use PKP\i18n\LocaleConversion;
-use PKP\submission\Genre;
 use PKP\submissionFile\enums\MediaVariantType;
 use PKP\submissionFile\SubmissionFile;
 use APP\facades\Repo;
 use PKP\controlledVocab\ControlledVocab;
 use PKP\submissionFile\VariantGroup;
+use FilesystemIterator;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 use SplFileInfo;
 use XSLTProcessor;
 
@@ -204,15 +206,19 @@ trait PublicationParser
         $publication = Repo::publication()->edit($publication, []);
 
         // Handle PDF galley
-        $this->_insertPDFGalley($publication);
+        if ($this->hasDoi()) {
+            $this->_insertPDFGalley($publication);
+        }
 
         // Store the JATS XML
         $this->_insertXMLSubmissionFile($publication);
         // Process full text and generate HTML files
-        $this->_processFullText(false);
-        $this->downloadHtml();
-        $this->_insertHTMLGalley($publication);
-        $this->_insertSupplementaryGalleys($publication);
+        if ($this->hasDoi()) {
+            $this->_processFullText(false);
+            $this->downloadHtml();
+            $this->_insertHTMLGalley($publication);
+            $this->_insertSupplementaryGalleys($publication);
+        }
 
         // Publishes the article
         Repo::publication()->publish($publication);
@@ -480,6 +486,21 @@ trait PublicationParser
             $dependentFilePath = dirname($filename) . "/{$assetFilename}";
             if (file_exists($dependentFilePath)) {
                 $this->_createDependentFile($submission, $userId, $publication, $dependentFilePath);
+            }
+        }
+
+        if (!$this->hasDoi()) {
+            $metadataPath = $file->getRealPath();
+            $directory = $this->getArticleVersion()->getPath()->getPathname();
+            $iterator = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS)
+            );
+            /** @var SplFileInfo $path */
+            foreach ($iterator as $path) {
+                if (!$path->isFile() || $path->getRealPath() === $metadataPath) {
+                    continue;
+                }
+                $this->_createDependentFile($submission, $userId, $publication, $path->getPathname());
             }
         }
     }
@@ -969,5 +990,10 @@ trait PublicationParser
 
             file_put_contents($path, $output);
         }
+    }
+
+    public function hasDoi(): bool
+    {
+        return (bool) ($this->getPublicIds()['doi'] ?? false);
     }
 }
