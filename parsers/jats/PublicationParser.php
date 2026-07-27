@@ -273,8 +273,8 @@ trait PublicationParser
 
         $doi = $this->getPublicIds()['doi'] ?? null;
         $doi = explode('.', $doi);
-        $version = array_pop($doi);
-        $articleId = array_pop($doi);
+        $version = (int) array_pop($doi);
+        $articleId = (int) array_pop($doi);
         $connection = ArticleImporterPlugin::getOreConnection();
         $versionId = $connection->table('f1000r_version as v')
             ->where('v.article_id', $articleId)

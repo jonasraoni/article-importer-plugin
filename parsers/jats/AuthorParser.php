@@ -42,8 +42,8 @@ trait AuthorParser
             ->first() ?? throw new Exception('Co-Author contributor role not found');
         $doi = $this->getPublicIds()['doi'] ?? null;
         $doi = explode('.', $doi);
-        $version = array_pop($doi);
-        $articleId = array_pop($doi);
+        $version = (int) array_pop($doi);
+        $articleId = (int) array_pop($doi);
         $connection = ArticleImporterPlugin::getOreConnection();
         $databaseEmails = $connection->table('f1000r_author', 'a')
             ->leftJoin('f1000r_author_version as av', 'a.id', '=', 'av.author_id')

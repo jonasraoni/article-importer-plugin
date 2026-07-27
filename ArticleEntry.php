@@ -136,8 +136,8 @@ class ArticleEntry
             $publication = $parser->getPublication();
             $doi = $parser->getPublicIds()['doi'] ?? null;
             $doi = explode('.', $doi);
-            $version = array_pop($doi);
-            $articleId = array_pop($doi);
+            $version = (int) array_pop($doi);
+            $articleId = (int) array_pop($doi);
             $reports = $oreConnection
                 ->table('f1000r_report as r')
                 ->leftJoin('f1000r_version as v', 'r.version_id', '=', 'v.id')
