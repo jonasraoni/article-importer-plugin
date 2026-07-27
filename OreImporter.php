@@ -1912,4 +1912,23 @@ class OreImporter
 
         Repo::decision()->add($decision_obj);
     }
+
+    public static function resetAutoIncrements(): void
+    {
+        $database = DB::getDatabaseName();
+        // Find every table that actually has an AUTO_INCREMENT column, along with the name of that column.
+        $tables = DB::select("
+            SELECT TABLE_NAME AS `table`, COLUMN_NAME AS `column`
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = ?
+            AND EXTRA = 'auto_increment'
+        ", [$database]);
+        foreach ($tables as $row) {
+            $table = $row->table;
+            $column = $row->column;
+            $maxId = DB::table($table)->max($column) ?? 0;
+            $nextId = $maxId + 1;
+            DB::statement("ALTER TABLE `{$table}` AUTO_INCREMENT = {$nextId}");
+        }
+    }
 }

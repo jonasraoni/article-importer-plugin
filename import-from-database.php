@@ -202,6 +202,7 @@ try {
         }
 
         DB::update("UPDATE user_user_groups SET date_start = NULL");
+        OreImporter::resetAutoIncrements();
     } elseif (isset($argv[5])) {
         // Import specific article
         $articleId = $argv[5];
