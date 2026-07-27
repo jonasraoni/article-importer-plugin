@@ -126,8 +126,7 @@ class ArticleEntry
     public function process(Configuration $configuration): void
     {
         $oreConnection = ArticleImporterPlugin::getOreConnection();
-        $approvals = 0;
-        $approvalsWithReservations = 0;
+        $latestDecisionByReferee = [];
         $versionMajor = 0;
         $previouslyPassedReview = false;
         $processed = false;
@@ -140,7 +139,11 @@ class ArticleEntry
             $articleId = (int) array_pop($doi);
             $reports = $oreConnection
                 ->table('f1000r_report as r')
-                ->leftJoin('f1000r_version as v', 'r.version_id', '=', 'v.id')
+                ->join('f1000r_version as v', 'r.version_id', '=', 'v.id')
+                ->join('f1000r_referee_report as rr', function ($join) {
+                    $join->on('rr.report_id', '=', 'r.id')
+                        ->where('rr.is_coreferee', false);
+                })
                 ->where('v.article_id', $articleId)
                 ->where('v.version_number', $version)
                 ->where('v.status', 'PUBLISHED')
@@ -149,7 +152,13 @@ class ArticleEntry
                 ->get();
 
             foreach ($reports as $report) {
-                match ($report->decision) {
+                $latestDecisionByReferee[(int) $report->referee_id] = $report->decision;
+            }
+
+            $approvals = 0;
+            $approvalsWithReservations = 0;
+            foreach ($latestDecisionByReferee as $decision) {
+                match ($decision) {
                     'APPROVED' => $approvals++,
                     'APPROVED_WITH_RESERVATIONS' => $approvalsWithReservations++,
                     default => null
