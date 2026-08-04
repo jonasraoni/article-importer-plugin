@@ -13,6 +13,7 @@ require_once __DIR__ . '/../../../tools/bootstrap.php';
 use APP\core\Application;
 use APP\core\PageRouter;
 use APP\facades\Repo;
+use APP\notification\Notification;
 use APP\plugins\importexport\articleImporter\ArticleImporterPlugin;
 use APP\plugins\importexport\articleImporter\Configuration;
 use APP\plugins\importexport\articleImporter\OreImporter;
@@ -31,22 +32,15 @@ if (isset($argv[1]) && $argv[1] === '--cleanup') {
     DB::delete("delete from jobs");
 
     echo "Deleting submissions\n";
-    foreach (DB::select("select distinct p.submission_id from publication_settings ps inner join publications p on p.publication_id = ps.publication_id where ps.setting_name = 'pub-id::publisher-id'") as $row) {
+    foreach (DB::select("select submission_id from submissions") as $row) {
         try {
-            DB::delete("delete from review_assignments where submission_id = ?", [$row->submission_id]);
-            DB::delete("delete from review_rounds where submission_id = ?", [$row->submission_id]);
-
             $submission = Repo::submission()->get($row->submission_id);
-            echo "Deleting submission: " . $row->submission_id . "\n";
-            if ($submission) {
-                for ($i = 0; $i < 20; $i++) {
-                    Repo::submission()->delete($submission);
-                }
-            }
+            Repo::submission()->delete($submission);
         } catch (\Throwable $e) {
             echo "$e\n\n";
         }
     }
+
     echo "Cleaning tombstones\n";
     DB::delete(
         "DELETE dot
@@ -54,6 +48,13 @@ if (isset($argv[1]) && $argv[1] === '--cleanup') {
         LEFT JOIN submissions s ON dot.data_object_id = s.submission_id
         WHERE s.submission_id IS NULL"
     );
+
+    echo "Cleaning notifications\n";
+    Notification::query()->delete();
+
+    echo "Cleaning events\n";
+    Repo::eventLog()->deleteMany(Repo::eventLog()->getCollector());
+
     echo "Cleanup done\n";
     exit(0);
 }
@@ -111,7 +112,6 @@ try {
         }
 
         echo "Importing all articles with filters: " . json_encode($filters) . "\n";
-        //OreImporter::importAllArticles($configuration, $connection, $filters);
         foreach (Repo::submission()->getCollector()->filterByContextIds([$configuration->getContext()->getId()])->orderBy(Repo::submission()->getCollector()::ORDERBY_ID)->getMany() as $submission) {
             $importer = new OreImporter($configuration, $connection, $submission->getId());
             echo 'Processed ' . $submission->getId() . "\n";
@@ -208,7 +208,6 @@ try {
         $articleId = $argv[5];
         echo "Importing article ID: {$articleId}\n";
         $importer = new OreImporter($configuration, $connection, $articleId);
-        //$importer->execute();
         echo "Successfully imported\n";
     } else {
         echo "Usage:\n";
