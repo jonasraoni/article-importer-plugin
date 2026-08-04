@@ -32,6 +32,14 @@ class Parser extends BaseParser
      */
     public function canParse(): bool
     {
+        $title = $this->selectText('front/article-meta/title-group/article-title');
+        if (!$title && $articleMeta = $this->selectFirst('/article-meta')) {
+            $front = $this->_document->createElement('front');
+            $front->appendChild($articleMeta);
+            $article = $this->_document->createElement('article');
+            $article->appendChild($front);
+            $this->_document->appendChild($article);
+        }
         return (bool) $this->selectFirst('front/article-meta/title-group/article-title');
     }
 

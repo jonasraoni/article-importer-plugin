@@ -15,6 +15,7 @@ namespace APP\plugins\importexport\articleImporter;
 use APP\facades\Repo;
 use APP\plugins\importexport\articleImporter\exceptions\ArticleSkippedException;
 use APP\publication\enums\VersionStage;
+use APP\publication\Publication;
 use Generator;
 use PKP\publication\helpers\PublicationVersionInfo;
 use SplFileInfo;
@@ -184,7 +185,9 @@ class ArticleEntry
 
             $publication->setVersion(new PublicationVersionInfo($passedReview ? VersionStage::VERSION_OF_RECORD : VersionStage::PUBLISHED_MANUSCRIPT_UNDER_REVIEW, $versionMajor, 0));
             // Publishes the article
-            Repo::publication()->publish($publication);
+            if ($publication->getData('datePublished')) {
+                Repo::publication()->publish($publication);
+            }
 
             $processed = true;
         }

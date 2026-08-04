@@ -16,6 +16,7 @@ use APP\plugins\importexport\articleImporter\EntityManager;
 use DateInterval;
 use APP\submission\Submission;
 use APP\facades\Repo;
+use DateTimeImmutable;
 
 trait SubmissionParser
 {
@@ -30,13 +31,14 @@ trait SubmissionParser
             return $submission;
         }
 
+        $publicationDate = $this->getPublicationDate() ?: $this->getIssuePublicationDate();
         $submission = Repo::submission()->newDataObject();
         $submission->setData('contextId', $this->getContextId());
-        $submission->setData('status', Submission::STATUS_PUBLISHED);
+        $submission->setData('status', $publicationDate ? Submission::STATUS_PUBLISHED : Submission::STATUS_QUEUED);
         $submission->setData('submissionProgress', '');
-        $submission->setData('stageId', WORKFLOW_STAGE_ID_PRODUCTION);
+        $submission->setData('stageId', $publicationDate ?WORKFLOW_STAGE_ID_PRODUCTION : WORKFLOW_STAGE_ID_SUBMISSION);
         $submission->setData('locale', $this->getLocale());
-        $date = $this->getDateFromNode($this->selectFirst("front/article-meta/history/date[@date-type='received']")) ?: $this->getPublicationDate()->add(new DateInterval('P1D'));
+        $date = $this->getDateFromNode($this->selectFirst("front/article-meta/history/date[@date-type='received']")) ?: $publicationDate?->add(new DateInterval('P1D')) ?: new DateTimeImmutable();
         $submission->setData('dateSubmitted', $date->format(static::DATETIME_FORMAT));
         // Creates the submission
         Repo::submission()->dao->insert($submission);

@@ -59,9 +59,6 @@ trait PublicationParser
 
         // getPublicationDate() throws when the article XML has no date; in continuous publishing (no issue) a date is therefore required
         $publicationDate = $this->getPublicationDate() ?: $this->getIssuePublicationDate();
-        if (!$publicationDate) {
-            throw new Exception(__('plugins.importexport.articleImporter.missingPublicationDate'));
-        }
         $version = $this->getArticleVersion()->getVersion();
         $submission = $this->getSubmission();
 
@@ -77,11 +74,13 @@ trait PublicationParser
                 $publication->setData('sourcePublicationId', $source_publication->getId());
             }
         }
-        $publication->setData('status', Submission::STATUS_PUBLISHED);
+        $publication->setData('status', $publicationDate ? Submission::STATUS_PUBLISHED : Publication::STATUS_QUEUED);
         $publication->setVersion(new PublicationVersionInfo(VersionStage::VERSION_OF_RECORD, $version, 0));
         $publication->setData('seq', $version);
         $publication->setData('accessStatus', Submission::ARTICLE_ACCESS_OPEN);
-        $publication->setData('datePublished', $publicationDate->format(static::DATETIME_FORMAT));
+        if ($publicationDate) {
+            $publication->setData('datePublished', $publicationDate->format(static::DATETIME_FORMAT));
+        }
         $publication->setData('sectionId', $this->getSection()->getId());
         $publication->setData('issueId', $this->getIssue()?->getId());
         $publication->setData('urlPath', null);
@@ -196,7 +195,7 @@ trait PublicationParser
         $this->_processCategories($publication);
 
         // Inserts the publication and updates the submission
-        Repo::publication()->add($publication);
+        Repo::publication()->add($publication, $publicationDate ? null : false);
         $this->_processFundingAwardGroups($publication);
         $this->_processKeywords($publication);
         // Reload object with keywords (otherwise they will be cleared later on)
@@ -221,7 +220,9 @@ trait PublicationParser
         }
 
         // Publishes the article
-        Repo::publication()->publish($publication);
+        if ($publicationDate) {
+            Repo::publication()->publish($publication);
+        }
 
         return $this->_publication = $publication;
     }
@@ -535,7 +536,7 @@ trait PublicationParser
         $newSubmissionFile = Repo::submissionFile()->newDataObject();
         $newSubmissionFile->setData('submissionId', $submission->getId());
         $newSubmissionFile->setData('fileId', $newFileId);
-        $newSubmissionFile->setData('fileStage', $isImage ? SubmissionFile::SUBMISSION_FILE_MEDIA : SubmissionFile::SUBMISSION_FILE_PROOF);
+        $newSubmissionFile->setData('fileStage', $isImage ? SubmissionFile::SUBMISSION_FILE_MEDIA : SubmissionFile::SUBMISSION_FILE_SUBMISSION);
         $newSubmissionFile->setData('genreId', $genreId);
         $newSubmissionFile->setData('createdAt', Core::getCurrentDate());
         $newSubmissionFile->setData('updatedAt', Core::getCurrentDate());
@@ -672,7 +673,7 @@ trait PublicationParser
     /**
      * Retrieves the publication date
      */
-    public function getPublicationDate(): DateTimeImmutable
+    public function getPublicationDate(): ?DateTimeImmutable
     {
         $node = null;
         // Find the most suitable pub-date node
@@ -683,7 +684,7 @@ trait PublicationParser
             }
         }
         if (!$date = $this->getDateFromNode($node)) {
-            throw new Exception(__('plugins.importexport.articleImporter.missingPublicationDate'));
+            return null;
         }
         return $date;
     }
