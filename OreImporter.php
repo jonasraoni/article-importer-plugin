@@ -231,7 +231,8 @@ class OreImporter
             LEFT JOIN LATERAL (
                 SELECT json_agg(coreferee) AS content FROM (
                     SELECT json_build_object(
-                        'name', CONCAT(re.first_name, ' ', re.last_name),
+                        'name', re.first_name,
+                        'surname', re.last_name,
                         'affiliation', STRING_AGG(
                             CONCAT(
                                 i.name,
@@ -258,7 +259,7 @@ class OreImporter
             WHERE v.article_id = ?
             AND r.decision IS NOT NULL
             AND r.status = 'PUBLISHED'
-            ORDER BY v.id, rr.position, r.id;
+            ORDER BY v.id, rr.position, r.id
         ", [$articleId]);
 
         if (empty($reviews)) {
@@ -459,7 +460,7 @@ class OreImporter
 
                             return ($orcid ? '<a href="https://orcid.org/' . $orcid . '" target="_blank" class="d-flex align-items-center gap-1 text-decoration-none" aria-label="ORCID record of ' . htmlspecialchars($coreferee['name']) . '">' : '') . '
                                 <span class="ore-grey-900 ore-label-small">
-                                    ' . htmlspecialchars($coreferee['name']) . ($coreferee['affiliation'] ? ', ' . htmlspecialchars($coreferee['affiliation']) : '') . '
+                                    ' . htmlspecialchars($coreferee['name'] . ' ' . $coreferee['surname']) . ($coreferee['affiliation'] ? ', ' . htmlspecialchars($coreferee['affiliation']) : '') . '
                                 </span>
                                 ' . ($orcid ? '
                                 <span class="ore-label-small ore-tertiary-900">
