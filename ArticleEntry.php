@@ -189,6 +189,9 @@ class ArticleEntry
                 Repo::publication()->publish($publication);
             }
 
+            $reviewImporter = new ReviewImporter($configuration, $oreConnection, $version);
+            $reviewImporter->createReviewsForVersions($parser->getSubmission());
+
             $processed = true;
         }
 

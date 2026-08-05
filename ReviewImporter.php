@@ -38,9 +38,11 @@ class ReviewImporter
 {
     public const DATETIME_FORMAT = 'Y-m-d H:i:s';
     private string $locale = 'en';
+    private int $contextId;
 
-    public function __construct(private Configuration $configuration, private \Illuminate\Database\Connection $connection, private int $contextId, private int $versionNumber)
+    public function __construct(private Configuration $configuration, private \Illuminate\Database\Connection $connection, private int $versionNumber)
     {
+        $this->contextId = $configuration->getContext()->getId();
     }
 
     /**
@@ -638,24 +640,5 @@ class ReviewImporter
         ]);
 
         Repo::decision()->add($decision_obj);
-    }
-
-    public static function resetAutoIncrements(): void
-    {
-        $database = DB::getDatabaseName();
-        // Find every table that actually has an AUTO_INCREMENT column, along with the name of that column.
-        $tables = DB::select("
-            SELECT TABLE_NAME AS `table`, COLUMN_NAME AS `column`
-            FROM information_schema.COLUMNS
-            WHERE TABLE_SCHEMA = ?
-            AND EXTRA = 'auto_increment'
-        ", [$database]);
-        foreach ($tables as $row) {
-            $table = $row->table;
-            $column = $row->column;
-            $maxId = DB::table($table)->max($column) ?? 0;
-            $nextId = $maxId + 1;
-            DB::statement("ALTER TABLE `{$table}` AUTO_INCREMENT = {$nextId}");
-        }
     }
 }

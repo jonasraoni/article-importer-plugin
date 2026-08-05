@@ -13,8 +13,11 @@
 namespace APP\plugins\importexport\articleImporter;
 
 use APP\journal\JournalDAO;
+use APP\notification\Notification;
 use APP\plugins\importexport\articleImporter\exceptions\ArticleSkippedException;
 use APP\plugins\importexport\articleImporter\parsers\jats\Parser;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use PKP\core\Registry;
 use PKP\db\DAORegistry;
 use PKP\plugins\Hook;
@@ -65,6 +68,12 @@ class ArticleImporterPlugin extends ImportExportPlugin
         // Map arguments to variables
         [$contextPath, $username, $editorUsername, $email, $importPath] = $args;
 
+
+        if (in_array('--cleanup', $args)) {
+            $this->cleanup();
+            exit(0);
+        }
+
         // Parse command-line flags
         $generateHtml = !in_array('--no-html', $args);
         $useCategoryAsSection = in_array('--use-category-as-section', $args);
@@ -72,6 +81,8 @@ class ArticleImporterPlugin extends ImportExportPlugin
         $hasVolume = !in_array('--no-volume', $args);
         $hasNumber = !in_array('--no-number', $args);
         $preloadHtml = in_array('--preload-html', $args);
+
+        $this->resetAutoIncrements();
 
         $count = $imported = $failed = $skipped = 0;
         try {
@@ -150,11 +161,147 @@ class ArticleImporterPlugin extends ImportExportPlugin
                 $this->resequenceIssues($configuration);
             }
 
+            $this->_writeLine('Processing Orcids');
+            $this->processOrcids();
+            $this->_writeLine('Including extra data for reviewers');
+            $this->fillReviewerIdentityFromAuthor($configuration->getContext()->getId());
+            DB::update("UPDATE user_user_groups SET date_start = NULL");
+
             $this->_writeLine(__('plugins.importexport.articleImporter.importEnd'));
         } catch (Throwable $e) {
             $this->_writeLine(__('plugins.importexport.articleImporter.importError', ['message' => $e]));
         }
         $this->_writeLine(__('plugins.importexport.articleImporter.importStatus', ['count' => $count, 'imported' => $imported, 'failed' => $failed, 'skipped' => $skipped]));
+    }
+
+    /**
+     * Import Orcids
+     */
+    public function processOrcids(): void
+    {
+        $orcids = static::getOreConnection()->table('orcid_access_data')
+            ->selectRaw('DISTINCT ON (orcid) *')
+            ->orderBy('orcid')
+            ->orderByDesc('created_on')
+            ->get();
+        foreach ($orcids as $orcid) {
+            $authorIds = DB::table('author_settings')->where('setting_name', 'orcid')
+                ->where('setting_value', 'https://orcid.org/' . $orcid->orcid)
+                ->get()
+                ->pluck('author_id')
+                ->toArray();
+            $rows = [];
+            foreach ($authorIds as $authorId) {
+                $rows[] = ['author_id' => $authorId, 'setting_name' => 'orcidIsVerified', 'setting_value' => '1'];
+                $rows[] = ['author_id' => $authorId, 'setting_name' => 'orcidAccessToken', 'setting_value' => (string) $orcid->access_token];
+                $rows[] = ['author_id' => $authorId, 'setting_name' => 'orcidAccessScope', 'setting_value' => (string) $orcid->access_scope];
+                $rows[] = ['author_id' => $authorId, 'setting_name' => 'orcidRefreshToken', 'setting_value' => (string) $orcid->refresh_token];
+                $rows[] = ['author_id' => $authorId, 'setting_name' => 'orcidAccessExpiresOn', 'setting_value' => (string) Carbon::now()->addSeconds((int) $orcid->expires_in)];
+            }
+            DB::table('author_settings')->upsert(
+                $rows,
+                ['author_id', 'setting_name'],
+                ['setting_value']
+            );
+        }
+    }
+
+    /**
+     * Cleanup the database
+     */
+    public function cleanup(): void
+    {
+        $this->_writeLine('Deleting jobs');
+        DB::delete('DELETE FROM failed_jobs');
+        DB::delete('DELETE FROM jobs');
+
+        $this->_writeLine('Deleting submissions');
+        foreach (DB::select('SELECT submission_id FROM submissions') as $row) {
+            try {
+                $submission = Repo::submission()->get($row->submission_id);
+                Repo::submission()->delete($submission);
+            } catch (Throwable $e) {
+                $this->_writeLine($e);
+            }
+        }
+
+        $this->_writeLine('Cleaning tombstones');
+        DB::delete(
+            'DELETE dot
+            FROM data_object_tombstones dot
+            LEFT JOIN submissions s ON dot.data_object_id = s.submission_id
+            WHERE s.submission_id IS NULL'
+        );
+
+        $this->_writeLine('Cleaning notifications');
+        Notification::query()->delete();
+
+        $this->_writeLine('Cleaning events');
+        Repo::eventLog()->deleteMany(Repo::eventLog()->getCollector());
+
+        $this->_writeLine('Cleanup done');
+    }
+
+    /**
+     * Looks up an existing author matching the given email and extracts identity
+     * data (all ORCID OAuth fields and a flattened, localized affiliation string)
+     * for reuse on a user.
+     */
+    public function fillReviewerIdentityFromAuthor(int $contextId): void
+    {
+        /**
+         * @param string $email
+         * @return array{0: array<string, mixed>, 1: ?string} [orcidData, affiliation]
+         */
+        $getReviewerIdentityFromAuthor = function (string $email): array {
+            // Authors store email as a column on the authors table. Prefer the most
+            // recently inserted match, which is most likely to carry complete data.
+            $author_id = DB::table('authors')
+                ->where('email', $email)
+                ->orderByDesc('author_id')
+                ->value('author_id');
+
+            if (!$author_id) {
+                return [[], null];
+            }
+
+            $author = Repo::author()->get($author_id);
+            if (!$author) {
+                return [[], null];
+            }
+
+            // Copy the full set of ORCID fields shared via the HasOrcid trait.
+            $orcidFields = ['orcid', 'orcidIsVerified', 'orcidAccessDenied', 'orcidAccessToken', 'orcidAccessScope', 'orcidRefreshToken', 'orcidAccessExpiresOn'];
+            $orcidData = [];
+            foreach ($orcidFields as $field) {
+                $value = $author->getData($field);
+                if ($value !== null) {
+                    $orcidData[$field] = $value;
+                }
+            }
+
+            $affiliation = $author->getLocalizedAffiliationNamesAsString('en') ?: null;
+
+            return [$orcidData, $affiliation];
+        };
+
+        foreach (Repo::user()->getCollector()->filterByContextIds([$contextId])->getMany() as $user) {
+            // Backfill ORCID and affiliation from an existing author with the same email.
+            // This covers at least the author participant; richer source data is currently obfuscated.
+            [$orcidData, $affiliation] = $getReviewerIdentityFromAuthor($user->getEmail());
+            $updated = false;
+            if ($orcidData) {
+                $user->setVerifiedOrcidOAuthData($orcidData);
+                $updated = true;
+            }
+            if ($affiliation) {
+                $user->setAffiliation($affiliation, 'en');
+                $updated = true;
+            }
+            if ($updated) {
+                Repo::user()->edit($user);
+            }
+        }
     }
 
     /**
@@ -242,5 +389,27 @@ class ArticleImporterPlugin extends ImportExportPlugin
     public function usage($scriptName): void
     {
         $this->_writeLine(__('plugins.importexport.articleImporter.cliUsage', ['scriptName' => $scriptName, 'pluginName' => $this->getName()]));
+    }
+
+    /**
+     * Reset the auto increment fields
+     */
+    public static function resetAutoIncrements(): void
+    {
+        $database = DB::getDatabaseName();
+        // Find every table that actually has an AUTO_INCREMENT column, along with the name of that column.
+        $tables = DB::select("
+            SELECT TABLE_NAME AS `table`, COLUMN_NAME AS `column`
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = ?
+            AND EXTRA = 'auto_increment'
+        ", [$database]);
+        foreach ($tables as $row) {
+            $table = $row->table;
+            $column = $row->column;
+            $maxId = DB::table($table)->max($column) ?? 0;
+            $nextId = $maxId + 1;
+            DB::statement("ALTER TABLE `{$table}` AUTO_INCREMENT = {$nextId}");
+        }
     }
 }
