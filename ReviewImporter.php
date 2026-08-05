@@ -7,7 +7,7 @@
  * Distributed under the GNU GPL v3. For full terms see the file docs/COPYING.
  *
  * @class ReviewImporter
-
+ *
  */
 
 namespace APP\plugins\importexport\articleImporter;
@@ -204,116 +204,116 @@ class ReviewImporter
         $this->assignStageAssignments($submission);
 
         // Group reviews by version_number (which determines the review round)
-        $reviews_by_version_number = [];
+        $reviewsByVersionNumber = [];
         foreach ($reviews as $review) {
-            $version_number = (int) $review->version_number;
-            if (!isset($reviews_by_version_number[$version_number])) {
-                $reviews_by_version_number[$version_number] = [];
+            $versionNumber = (int) $review->version_number;
+            if (!isset($reviewsByVersionNumber[$versionNumber])) {
+                $reviewsByVersionNumber[$versionNumber] = [];
             }
-            $reviews_by_version_number[$version_number][] = $review;
+            $reviewsByVersionNumber[$versionNumber][] = $review;
         }
 
         // Get reviewer user group ID
-        $reviewer_user_groups = Repo::userGroup()->getByRoleIds([Role::ROLE_ID_REVIEWER], $this->contextId);
-        $reviewer_group_id = $reviewer_user_groups->first()?->id;
-        if (!$reviewer_group_id) {
+        $reviewerUserGroups = Repo::userGroup()->getByRoleIds([Role::ROLE_ID_REVIEWER], $this->contextId);
+        $reviewerGroupId = $reviewerUserGroups->first()?->id;
+        if (!$reviewerGroupId) {
             throw new Exception('Reviewer user group not found');
         }
 
         // Get review round DAO
-        $review_round_dao = DAORegistry::getDAO('ReviewRoundDAO'); /** @var ReviewRoundDAO $review_round_dao */
+        $reviewRoundDao = DAORegistry::getDAO('ReviewRoundDAO'); /** @var ReviewRoundDAO $reviewRoundDao */
 
         // Process each version (grouped by version_number)
-        foreach ($reviews_by_version_number as $version_number => $version_reviews) {
-            $review = reset($version_reviews);
+        foreach ($reviewsByVersionNumber as $versionNumber => $versionReviews) {
+            $review = reset($versionReviews);
             // Find the publication for this version
             $publication = null;
             /** @var Publication $pub */
             foreach ($publications as $pub) {
-                if ($pub->getData('seq') == $version_number) {
+                if ($pub->getData('seq') == $versionNumber) {
                     $publication = $pub;
                     break;
                 }
             }
 
             if (!$publication) {
-                error_log("Publication not found for version number {$version_number}, skipping reviews");
+                error_log("Publication not found for version number {$versionNumber}, skipping reviews");
                 continue;
             }
 
             // Create a review round for this version using version_number as the round number
-            $review_round = $review_round_dao->build(
+            $reviewRound = $reviewRoundDao->build(
                 $submission->getId(),
                 $publication->getId(),
                 WORKFLOW_STAGE_ID_EXTERNAL_REVIEW,
-                $version_number
+                $versionNumber
             );
 
             // Group reviews by review_id to handle multiple reviewers per review
-            $reviews_by_review_id = [];
-            foreach ($version_reviews as $review) {
-                $review_id = $review->review_id;
-                if (!isset($reviews_by_review_id[$review_id])) {
-                    $reviews_by_review_id[$review_id] = [
-                        'review_data' => $review,
+            $reviewsByReviewId = [];
+            foreach ($versionReviews as $review) {
+                $reviewId = $review->review_id;
+                if (!isset($reviewsByReviewId[$reviewId])) {
+                    $reviewsByReviewId[$reviewId] = [
+                        'reviewData' => $review,
                         'reviewers' => []
                     ];
                 }
-                $reviews_by_review_id[$review_id]['reviewers'][] = $review;
+                $reviewsByReviewId[$reviewId]['reviewers'][] = $review;
             }
 
             // Process each unique review
-            foreach ($reviews_by_review_id as $review_id => $review_data) {
-                $review_record = $review_data['review_data'];
-                $reviewers = $review_data['reviewers'];
+            foreach ($reviewsByReviewId as $reviewId => $reviewData) {
+                $reviewRecord = $reviewData['reviewData'];
+                $reviewers = $reviewData['reviewers'];
 
                 // Create review assignments for each reviewer in this review
-                foreach ($reviewers as $reviewer_data) {
-                    $reviewer_user = $this->getOrCreateUser(
-                        $reviewer_data->first_name,
-                        $reviewer_data->last_name,
-                        $reviewer_data->email,
-                        $reviewer_group_id
+                foreach ($reviewers as $reviewerData) {
+                    $reviewerUser = $this->getOrCreateUser(
+                        $reviewerData->first_name,
+                        $reviewerData->last_name,
+                        $reviewerData->email,
+                        $reviewerGroupId
                     );
 
-                    $reviewer_recommendation_id = $this->getReviewerRecommendationIdForDecision($review_record->decision ?? null);
+                    $reviewerRecommendationId = $this->getReviewerRecommendationIdForDecision($reviewRecord->decision ?? null);
 
-                    $doi = $review_record->doi ? Repo::doi()->getCollector()->filterByIdentifier($review_record->doi)->getMany()->first() : null;
-                    if (!$doi && $review_record->doi) {
+                    $doi = $reviewRecord->doi ? Repo::doi()->getCollector()->filterByIdentifier($reviewRecord->doi)->getMany()->first() : null;
+                    if (!$doi && $reviewRecord->doi) {
                         $doi = Repo::doi()->newDataObject([
-                            'doi' => $review_record->doi,
+                            'doi' => $reviewRecord->doi,
                             'contextId' => $this->configuration->getContext()->getId()
                         ]);
                         Repo::doi()->add($doi);
                         $doi = Repo::doi()->get($doi->getId());
                     }
                     // Create new review assignment
-                    $review_assignment = Repo::reviewAssignment()->newDataObject([
+                    $reviewAssignment = Repo::reviewAssignment()->newDataObject([
                         'submissionId' => $submission->getId(),
-                        'reviewerId' => $reviewer_user->getId(),
-                        'reviewRoundId' => $review_round->getId(),
+                        'reviewerId' => $reviewerUser->getId(),
+                        'reviewRoundId' => $reviewRound->getId(),
                         'stageId' => WORKFLOW_STAGE_ID_EXTERNAL_REVIEW,
-                        'round' => (int) $review_record->version_number,
+                        'round' => (int) $reviewRecord->version_number,
                         'dateAssigned' => Core::getCurrentDate(),
-                        'dateCompleted' => $review_record->published_date
-                            ? $this->parseDateString($review_record->published_date)?->format(static::DATETIME_FORMAT)
+                        'dateCompleted' => $reviewRecord->published_date
+                            ? $this->parseDateString($reviewRecord->published_date)?->format(static::DATETIME_FORMAT)
                             : Core::getCurrentDate(),
                         'status' => ReviewAssignment::REVIEW_ASSIGNMENT_STATUS_COMPLETE,
                         'dateConfirmed' => Core::getCurrentDate(),
                         'dateAcknowledged' => Core::getCurrentDate(),
-                        'reviewerRecommendationId' => $reviewer_recommendation_id,
+                        'reviewerRecommendationId' => $reviewerRecommendationId,
                         'competingInterestsDeclared' => 1,
-                        'competingInterests' => $review_record->competing_interests,
+                        'competingInterests' => $reviewRecord->competing_interests,
                         'reviewMethod' => ReviewAssignment::SUBMISSION_REVIEW_METHOD_OPEN,
                         'isReviewPubliclyVisible' => 1,
                         'doiId' => $doi?->getId()
                     ]);
 
-                    $review_assignment_id = Repo::reviewAssignment()->add($review_assignment);
-                    $review_assignment = Repo::reviewAssignment()->get($review_assignment_id);
+                    $reviewAssignmentId = Repo::reviewAssignment()->add($reviewAssignment);
+                    $reviewAssignment = Repo::reviewAssignment()->get($reviewAssignmentId);
 
-                    if (trim($review_record->coreferees)) {
-                        json_decode($review_record->coreferees, true, 512, JSON_THROW_ON_ERROR);
+                    if (trim($reviewRecord->coreferees)) {
+                        json_decode($reviewRecord->coreferees, true, 512, JSON_THROW_ON_ERROR);
                         $coreferees = array_map(function ($coreferee) {
                             $orcid = $coreferee['orcid'] ?? ($coreferee['email'] ? DB::scalar("
                                 SELECT COALESCE(
@@ -347,9 +347,8 @@ class ReviewImporter
                                     </svg>
                                 </span>
                             </a>' : '');
-                        }, $review_record->coreferees);
-                        $coreferees = implode('<br>', $coreferees);
-                        $review_record->comment = '<strong>The review was co-authored by:</strong><br>' . implode('<br>', $coreferees) . '<br><br>' . $review_record->comment;
+                        }, $reviewRecord->coreferees);
+                        $reviewRecord->comment = '<strong>The review was co-authored by:</strong><br>' . implode('<br>', $coreferees) . '<br><br>' . $reviewRecord->comment;
                     }
 
                     $questions = $this->connection->select("select
@@ -368,41 +367,41 @@ class ReviewImporter
                     where r.version_id = ?
                     and r.article_referee_id = ?
                     order by q.position
-                    ", [$review_record->version_id, $review_record->article_referee_id]);
+                    ", [$reviewRecord->version_id, $reviewRecord->article_referee_id]);
                     $questions = array_map(fn ($question) => "<strong>{$question->question_description}</strong><br>{$question->result}", $questions);
                     if (!empty($questions)) {
-                        $review_record->comment .= '<br><br>' . implode('<br><br>', $questions);
+                        $reviewRecord->comment .= '<br><br>' . implode('<br><br>', $questions);
                     }
 
-                    if (trim($review_record->areas_of_research)) {
-                        $review_record->comment .= '<br><br>' . '<strong>Reviewer Expertise:</strong><br>' . $review_record->areas_of_research;
+                    if (trim($reviewRecord->areas_of_research)) {
+                        $reviewRecord->comment .= '<br><br>' . '<strong>Reviewer Expertise:</strong><br>' . $reviewRecord->areas_of_research;
                     }
 
                     // Create review comment if provided
-                    if (!empty($review_record->comment)) {
-                        $submission_comment_dao = DAORegistry::getDAO('SubmissionCommentDAO'); /** @var SubmissionCommentDAO $submission_comment_dao */
-                        $comment = $submission_comment_dao->newDataObject();
+                    if (!empty($reviewRecord->comment)) {
+                        $submissionCommentDao = DAORegistry::getDAO('SubmissionCommentDAO'); /** @var SubmissionCommentDAO $submissionCommentDao */
+                        $comment = $submissionCommentDao->newDataObject();
                         $comment->setCommentType(SubmissionComment::COMMENT_TYPE_PEER_REVIEW);
                         $comment->setRoleId(Role::ROLE_ID_REVIEWER);
-                        $comment->setAssocId($review_assignment->getId());
-                        $comment->setSubmissionId($review_assignment->getSubmissionId());
-                        $comment->setAuthorId($review_assignment->getReviewerId());
-                        $comment->setComments($review_record->comment);
+                        $comment->setAssocId($reviewAssignment->getId());
+                        $comment->setSubmissionId($reviewAssignment->getSubmissionId());
+                        $comment->setAuthorId($reviewAssignment->getReviewerId());
+                        $comment->setComments($reviewRecord->comment);
                         $comment->setCommentTitle('');
                         $comment->setViewable(true);
                         $comment->setDatePosted(Core::getCurrentDate());
-                        $submission_comment_dao->insertObject($comment);
+                        $submissionCommentDao->insertObject($comment);
                     }
                 }
 
                 // Create an edit decision if we have a valid decision value
-                $this->createEditDecision($submission, $publication, $review_round, Decision::ACCEPT, $review_record->published_date);
+                $this->createEditDecision($submission, $publication, $reviewRound, Decision::ACCEPT, $reviewRecord->published_date);
             }
 
             // Import author responses: approved comments linked to reports in this round
-            $report_ids = array_map('intval', array_keys($reviews_by_review_id));
-            if (!empty($report_ids)) {
-                $this->importAuthorResponsesForRound($submission, $publication, $review_round, $report_ids);
+            $reportIds = array_map('intval', array_keys($reviewsByReviewId));
+            if (!empty($reportIds)) {
+                $this->importAuthorResponsesForRound($submission, $publication, $reviewRound, $reportIds);
             }
         }
     }
@@ -410,10 +409,10 @@ class ReviewImporter
     /**
      * Fetches approved comments from F1000R for the given report IDs (f1000r_comment_report.report_id).
      * Only comments in f1000r_comment with status = 'APPROVED' are returned.
-     * Each item has: text, creation_date, last_updated (raw from PostgreSQL).
+     * Each item has: text, creationDate, lastUpdated (raw from PostgreSQL).
      *
      * @param int[] $reportIds
-     * @return list<object{text: string, creation_date: mixed, last_updated: mixed}>
+     * @return list<object{text: string, creationDate: mixed, lastUpdated: mixed}>
      */
     private function getApprovedCommentsForReportIds(array $reportIds): array
     {
@@ -435,8 +434,8 @@ class ReviewImporter
             if ($text !== '') {
                 $out[] = (object) [
                     'text' => $row->text,
-                    'creation_date' => $row->creation_date,
-                    'last_updated' => $row->last_updated,
+                    'creationDate' => $row->creation_date,
+                    'lastUpdated' => $row->last_updated,
                 ];
             }
         }
@@ -447,50 +446,50 @@ class ReviewImporter
      * Creates or replaces author response(s) for the given review round using F1000R approved comments.
      * One AuthorResponse is created per approved comment, with createdAt/updatedAt from the PostgreSQL comment.
      */
-    private function importAuthorResponsesForRound(Submission $submission, Publication $publication, ReviewRound $review_round, array $reportIds): void
+    private function importAuthorResponsesForRound(Submission $submission, Publication $publication, ReviewRound $reviewRound, array $reportIds): void
     {
-        $approved_comments = $this->getApprovedCommentsForReportIds($reportIds);
-        if (empty($approved_comments)) {
+        $approvedComments = $this->getApprovedCommentsForReportIds($reportIds);
+        if (empty($approvedComments)) {
             return;
         }
 
         // Remove existing author responses for this round so re-import stays in sync
-        AuthorResponse::withReviewRoundIds([$review_round->getId()])->delete();
+        AuthorResponse::withReviewRoundIds([$reviewRound->getId()])->delete();
 
-        $author_stage_assignment = StageAssignment::withSubmissionIds([$submission->getId()])
+        $authorStageAssignment = StageAssignment::withSubmissionIds([$submission->getId()])
             ->withRoleIds([Role::ROLE_ID_AUTHOR])
-            ->withStageIds([$review_round->getStageId()])
+            ->withStageIds([$reviewRound->getStageId()])
             ->get()
             ->first();
-        $author_user_id = $author_stage_assignment !== null ? $author_stage_assignment->userId : null;
+        $authorUserId = $authorStageAssignment !== null ? $authorStageAssignment->userId : null;
 
-        if ($author_user_id === null) {
+        if ($authorUserId === null) {
             return;
         }
 
         $authors = $publication->getData('authors');
-        $associated_author_ids = $authors ? $authors->map(fn ($a) => $a->getId())->all() : [];
+        $associatedAuthorIds = $authors ? $authors->map(fn ($a) => $a->getId())->all() : [];
 
-        foreach ($approved_comments as $comment) {
-            $created_at = $this->formatCommentDateForOjs($comment->creation_date);
-            $updated_at = $this->formatCommentDateForOjs($comment->last_updated ?? $comment->creation_date);
+        foreach ($approvedComments as $comment) {
+            $createdAt = $this->formatCommentDateForOjs($comment->creationDate);
+            $updatedAt = $this->formatCommentDateForOjs($comment->lastUpdated ?? $comment->creationDate);
 
             $reviewResponse = AuthorResponse::create([
-                'reviewRoundId' => $review_round->getId(),
+                'reviewRoundId' => $reviewRound->getId(),
                 'authorResponse' => [$this->locale => $comment->text],
-                'userId' => $author_user_id,
+                'userId' => $authorUserId,
             ]);
 
             // Set createdAt and updatedAt from F1000R comment (AuthorResponse fillable does not include them)
             DB::table('review_round_author_responses')
                 ->where('response_id', $reviewResponse->id)
                 ->update([
-                    'created_at' => $created_at,
-                    'updated_at' => $updated_at,
+                    'created_at' => $createdAt,
+                    'updated_at' => $updatedAt,
                 ]);
 
-            if (!empty($associated_author_ids)) {
-                $reviewResponse->associateAuthorsToResponse($associated_author_ids);
+            if (!empty($associatedAuthorIds)) {
+                $reviewResponse->associateAuthorsToResponse($associatedAuthorIds);
             }
         }
     }
@@ -586,59 +585,59 @@ class ReviewImporter
      *
      * @param Submission $submission
      * @param Publication $publication
-     * @param \PKP\submission\reviewRound\ReviewRound $review_round
+     * @param \PKP\submission\reviewRound\ReviewRound $reviewRound
      * @param int $decision
-     * @param string|null $date_decided
+     * @param string|null $dateDecided
      */
-    private function createEditDecision(Submission $submission, Publication $publication, $review_round, int $decision, ?string $date_decided): void
+    private function createEditDecision(Submission $submission, Publication $publication, $reviewRound, int $decision, ?string $dateDecided): void
     {
         // Check if decision already exists for this review round
-        $existing_decisions = Repo::decision()->getCollector()
+        $existingDecisions = Repo::decision()->getCollector()
             ->filterBySubmissionIds([$submission->getId()])
-            ->filterByReviewRoundIds([$review_round->getId()])
+            ->filterByReviewRoundIds([$reviewRound->getId()])
             ->filterByDecisionTypes([$decision])
             ->getMany();
 
-        if ($existing_decisions->isNotEmpty()) {
+        if ($existingDecisions->isNotEmpty()) {
             // Decision already exists, skip
             return;
         }
 
         $editor = $this->configuration->getEditor();
-        $date_decided_obj = $date_decided
-            ? $this->parseDateString($date_decided)
+        $dateDecidedObj = $dateDecided
+            ? $this->parseDateString($dateDecided)
             : new DateTimeImmutable();
 
-        if (!$date_decided_obj) {
-            $date_decided_obj = new DateTimeImmutable();
+        if (!$dateDecidedObj) {
+            $dateDecidedObj = new DateTimeImmutable();
         }
 
         // Get decision type
-        $decision_types = Repo::decision()->getDecisionTypes();
-        $decision_type = null;
-        foreach ($decision_types as $dt) {
+        $decisionTypes = Repo::decision()->getDecisionTypes();
+        $decisionType = null;
+        foreach ($decisionTypes as $dt) {
             if ($dt->getDecision() === $decision) {
-                $decision_type = $dt;
+                $decisionType = $dt;
                 break;
             }
         }
 
-        if (!$decision_type) {
+        if (!$decisionType) {
             error_log("Decision type not found for decision constant: {$decision}");
             return;
         }
 
         // Create decision object
-        $decision_obj = Repo::decision()->newDataObject([
+        $decisionObj = Repo::decision()->newDataObject([
             'submissionId' => $submission->getId(),
             'publicationId' => $publication->getId(),
-            'reviewRoundId' => $review_round->getId(),
+            'reviewRoundId' => $reviewRound->getId(),
             'decision' => $decision,
             'editorId' => $editor->getId(),
-            'stageId' => $decision_type->getStageId(),
-            'dateDecided' => $date_decided_obj->format(static::DATETIME_FORMAT),
+            'stageId' => $decisionType->getStageId(),
+            'dateDecided' => $dateDecidedObj->format(static::DATETIME_FORMAT),
         ]);
 
-        Repo::decision()->add($decision_obj);
+        Repo::decision()->add($decisionObj);
     }
 }
