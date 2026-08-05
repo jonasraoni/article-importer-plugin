@@ -1,13 +1,12 @@
 <?php
 /**
- * @file JatsArrayImporter.php
+ * @file ReviewImporter.php
  *
- * Copyright (c) 2020 Simon Fraser University
- * Copyright (c) 2020 John Willinsky
+ * Copyright (c) 2026 Simon Fraser University
+ * Copyright (c) 2026 John Willinsky
  * Distributed under the GNU GPL v3. For full terms see the file docs/COPYING.
  *
- * @class JatsArrayImporter
- * @brief JATS import logic that queries PostgreSQL database directly
+ * @class ReviewImporter
 
  */
 
@@ -18,11 +17,9 @@ use APP\submission\Submission;
 use APP\facades\Repo;
 use DateTimeImmutable;
 use Exception;
-use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PKP\core\Core;
-use PKP\i18n\LocaleConversion;
 use PKP\decision\Decision;
 use PKP\db\DAORegistry;
 use PKP\security\Role;
@@ -37,69 +34,13 @@ use PKP\submission\SubmissionComment;
 use PKP\submission\SubmissionCommentDAO;
 use PKP\user\User;
 
-class OreImporter
+class ReviewImporter
 {
     public const DATETIME_FORMAT = 'Y-m-d H:i:s';
+    private string $locale = 'en';
 
-    /** @var Configuration Configuration */
-    private Configuration $_configuration;
-    /** @var Connection Database connection */
-    private Connection $_connection;
-    /** @var int|string Article ID */
-    private $_articleId;
-    /** @var int Context ID */
-    private int $_contextId;
-    /** @var string Default locale */
-    private string $_locale;
-
-    /**
-     * Constructor
-     */
-    public function __construct(Configuration $configuration, Connection $connection, $articleId)
+    public function __construct(private Configuration $configuration, private \Illuminate\Database\Connection $connection, private int $contextId, private int $versionNumber)
     {
-        $this->_configuration = $configuration;
-        $this->_connection = $connection;
-        $this->_articleId = $articleId;
-        $context = $this->_configuration->getContext();
-        $this->_contextId = $context->getId();
-        $this->_locale = $context->getPrimaryLocale();
-
-        $submissions = [Repo::submission()->get($this->_articleId)];
-        foreach ($submissions as $submission) {
-            $this->createReviewsForVersions($submission);
-        }
-    }
-
-    /**
-     * Retrieves the context ID
-     */
-    public function getContextId(): int
-    {
-        return $this->_contextId;
-    }
-
-    /**
-     * Tries to map the given locale to the PKP standard, returns the default locale if it fails or if the parameter is null
-     */
-    public function getLocale(?string $locale = null): string
-    {
-        if ($locale && !\PKP\facades\Locale::isLocaleValid($locale)) {
-            $locale = strtolower($locale);
-            // Tries to convert from recognized formats
-            $iso3 = LocaleConversion::getIso3FromIso1($locale) ?: LocaleConversion::getIso3FromLocale($locale);
-            // If the language part of the locale is the same (ex. fr_FR and fr_CA), then gives preference to context's locale
-            $locale = $iso3 == LocaleConversion::getIso3FromLocale($this->_locale) ? $this->_locale : LocaleConversion::getLocaleFrom3LetterIso((string) $iso3);
-        }
-        $locale = $locale ?: $this->_locale;
-        return $locale;
-    }
-
-    /**
-     * Retrieves the configuration instance
-     */
-    public function getConfiguration(): Configuration
-    {
-        return $this->_configuration;
     }
 
     /**
@@ -125,21 +66,14 @@ class OreImporter
     private function assignStageAssignments(Submission $submission): void
     {
         $submissionId = $submission->getId();
-        $config = $this->getConfiguration();
-
-        // Remove existing author stage assignments for this submission in external review
-        // so re-runs stay in sync (primary author may have changed)
-        StageAssignment::withSubmissionIds([$submissionId])
-            ->withRoleIds([Role::ROLE_ID_AUTHOR])
-            ->withStageIds([WORKFLOW_STAGE_ID_EXTERNAL_REVIEW])
-            ->delete();
+        $config = $this->configuration;
 
         // Ensure author group can participate in external review stage
         $config->ensureAuthorGroupInStage(WORKFLOW_STAGE_ID_EXTERNAL_REVIEW);
 
         $authorGroupId = $config->getAuthorGroupId();
         if (!$authorGroupId) {
-            return;
+            throw new Exception('Author group not found');
         }
 
         // Assign primary author only
@@ -151,15 +85,13 @@ class OreImporter
         if ($primaryAuthor) {
             $email = $primaryAuthor->getData('email');
             if ($email) {
-                $user = $this->getOrCreateAuthorUser(
-                    $primaryAuthor->getGivenName($this->_locale),
-                    $primaryAuthor->getFamilyName($this->_locale),
+                $user = $this->getOrCreateUser(
+                    $primaryAuthor->getGivenName($this->locale),
+                    $primaryAuthor->getFamilyName($this->locale),
                     $email,
                     $authorGroupId
                 );
-                if ($user) {
-                    Repo::stageAssignment()->build($submissionId, $authorGroupId, $user->getId());
-                }
+                Repo::stageAssignment()->build($submissionId, $authorGroupId, $user->getId());
             }
         }
 
@@ -187,7 +119,6 @@ class OreImporter
      */
     public function createReviewsForVersions(Submission $submission): void
     {
-
         $publications = $submission->getPublishedPublications();
         $bestDoi = null;
         foreach ($publications as $publication) {
@@ -206,7 +137,7 @@ class OreImporter
         $articleId = array_slice($doiParts, -2, 1)[0];
 
         // Execute the query to get all reviews
-        $reviews = $this->_connection->select(
+        $reviews = $this->connection->select(
             "SELECT
                 coreferees.content AS coreferees,
                 re.first_name,
@@ -257,10 +188,11 @@ class OreImporter
                 )
             ) AS coreferees ON true
             WHERE v.article_id = ?
+            AND v.version_number = ?
             AND r.decision IS NOT NULL
             AND r.status = 'PUBLISHED'
             ORDER BY v.id, rr.position, r.id
-        ", [$articleId]);
+        ", [$articleId, $this->versionNumber]);
 
         if (empty($reviews)) {
             return;
@@ -268,27 +200,6 @@ class OreImporter
 
         // Ensure stage assignments for author, editor (and reviewer via ReviewAssignment) in external review
         $this->assignStageAssignments($submission);
-
-        // Delete all existing review assignments for this submission in external review stage
-        // This ensures we can re-run the import and have a synchronized database
-        $existing_assignments = Repo::reviewAssignment()->getCollector()
-            ->filterBySubmissionIds([$submission->getId()])
-            ->filterByStageId(WORKFLOW_STAGE_ID_EXTERNAL_REVIEW)
-            ->getMany();
-
-        foreach ($existing_assignments as $assignment) {
-            // Delete associated comments first
-            $submission_comment_dao = DAORegistry::getDAO('SubmissionCommentDAO'); /** @var SubmissionCommentDAO $submission_comment_dao */
-            $comments = $submission_comment_dao->getReviewerCommentsByReviewerId(
-                $assignment->getSubmissionId(),
-                $assignment->getReviewerId(),
-                $assignment->getId()
-            );
-            while ($comment = $comments->next()) {
-                $submission_comment_dao->deleteObject($comment);
-            }
-            Repo::reviewAssignment()->delete($assignment);
-        }
 
         // Group reviews by version_number (which determines the review round)
         $reviews_by_version_number = [];
@@ -301,7 +212,7 @@ class OreImporter
         }
 
         // Get reviewer user group ID
-        $reviewer_user_groups = Repo::userGroup()->getByRoleIds([Role::ROLE_ID_REVIEWER], $this->_contextId);
+        $reviewer_user_groups = Repo::userGroup()->getByRoleIds([Role::ROLE_ID_REVIEWER], $this->contextId);
         $reviewer_group_id = $reviewer_user_groups->first()?->id;
         if (!$reviewer_group_id) {
             throw new Exception('Reviewer user group not found');
@@ -336,11 +247,6 @@ class OreImporter
                 $version_number
             );
 
-            if (!$review_round) {
-                error_log("Failed to create review round for version number {$version_number}");
-                continue;
-            }
-
             // Group reviews by review_id to handle multiple reviewers per review
             $reviews_by_review_id = [];
             foreach ($version_reviews as $review) {
@@ -361,25 +267,12 @@ class OreImporter
 
                 // Create review assignments for each reviewer in this review
                 foreach ($reviewers as $reviewer_data) {
-                    $reviewer_user = $this->getOrCreateReviewerUser(
+                    $reviewer_user = $this->getOrCreateUser(
                         $reviewer_data->first_name,
                         $reviewer_data->last_name,
                         $reviewer_data->email,
                         $reviewer_group_id
                     );
-
-                    if (!$reviewer_user) {
-                        error_log("Failed to get or create reviewer user for email: {$reviewer_data->email}");
-                        continue;
-                    }
-
-                    // Check if review assignment already exists
-                    $existing_assignment = Repo::reviewAssignment()->getCollector()
-                        ->filterBySubmissionIds([$submission->getId()])
-                        ->filterByReviewRoundIds([$review_round->getId()])
-                        ->filterByReviewerIds([$reviewer_user->getId()])
-                        ->getMany()
-                        ->first();
 
                     $reviewer_recommendation_id = $this->getReviewerRecommendationIdForDecision($review_record->decision ?? null);
 
@@ -387,54 +280,35 @@ class OreImporter
                     if (!$doi && $review_record->doi) {
                         $doi = Repo::doi()->newDataObject([
                             'doi' => $review_record->doi,
-                            'contextId' => $this->_configuration->getContext()->getId()
+                            'contextId' => $this->configuration->getContext()->getId()
                         ]);
                         Repo::doi()->add($doi);
                         $doi = Repo::doi()->get($doi->getId());
                     }
-                    if ($existing_assignment) {
-                        // Update existing assignment
-                        Repo::reviewAssignment()->edit($existing_assignment, [
-                            'round' => (int) $review_record->version_number,
-                            'reviewerRecommendationId' => $reviewer_recommendation_id,
-                            'competingInterests' => $review_record->competing_interests,
-                            'competingInterestsDeclared' => 1,
-                            'dateCompleted' => $review_record->published_date
-                                ? $this->parseDateString($review_record->published_date)?->format(static::DATETIME_FORMAT)
-                                : Core::getCurrentDate(),
-                            'status' => ReviewAssignment::REVIEW_ASSIGNMENT_STATUS_COMPLETE,
-                            'dateConfirmed' => Core::getCurrentDate(),
-                            'dateAcknowledged' => Core::getCurrentDate(),
-                            'isReviewPubliclyVisible' => 1,
-                            'doiId' => $doi?->getId()
-                        ]);
-                        $review_assignment = $existing_assignment;
-                    } else {
-                        // Create new review assignment
-                        $review_assignment = Repo::reviewAssignment()->newDataObject([
-                            'submissionId' => $submission->getId(),
-                            'reviewerId' => $reviewer_user->getId(),
-                            'reviewRoundId' => $review_round->getId(),
-                            'stageId' => WORKFLOW_STAGE_ID_EXTERNAL_REVIEW,
-                            'round' => (int) $review_record->version_number,
-                            'dateAssigned' => Core::getCurrentDate(),
-                            'dateCompleted' => $review_record->published_date
-                                ? $this->parseDateString($review_record->published_date)?->format(static::DATETIME_FORMAT)
-                                : Core::getCurrentDate(),
-                            'status' => ReviewAssignment::REVIEW_ASSIGNMENT_STATUS_COMPLETE,
-                            'dateConfirmed' => Core::getCurrentDate(),
-                            'dateAcknowledged' => Core::getCurrentDate(),
-                            'reviewerRecommendationId' => $reviewer_recommendation_id,
-                            'competingInterestsDeclared' => 1,
-                            'competingInterests' => $review_record->competing_interests,
-                            'reviewMethod' => ReviewAssignment::SUBMISSION_REVIEW_METHOD_OPEN,
-                            'isReviewPubliclyVisible' => 1,
-                            'doiId' => $doi?->getId()
-                        ]);
+                    // Create new review assignment
+                    $review_assignment = Repo::reviewAssignment()->newDataObject([
+                        'submissionId' => $submission->getId(),
+                        'reviewerId' => $reviewer_user->getId(),
+                        'reviewRoundId' => $review_round->getId(),
+                        'stageId' => WORKFLOW_STAGE_ID_EXTERNAL_REVIEW,
+                        'round' => (int) $review_record->version_number,
+                        'dateAssigned' => Core::getCurrentDate(),
+                        'dateCompleted' => $review_record->published_date
+                            ? $this->parseDateString($review_record->published_date)?->format(static::DATETIME_FORMAT)
+                            : Core::getCurrentDate(),
+                        'status' => ReviewAssignment::REVIEW_ASSIGNMENT_STATUS_COMPLETE,
+                        'dateConfirmed' => Core::getCurrentDate(),
+                        'dateAcknowledged' => Core::getCurrentDate(),
+                        'reviewerRecommendationId' => $reviewer_recommendation_id,
+                        'competingInterestsDeclared' => 1,
+                        'competingInterests' => $review_record->competing_interests,
+                        'reviewMethod' => ReviewAssignment::SUBMISSION_REVIEW_METHOD_OPEN,
+                        'isReviewPubliclyVisible' => 1,
+                        'doiId' => $doi?->getId()
+                    ]);
 
-                        $review_assignment_id = Repo::reviewAssignment()->add($review_assignment);
-                        $review_assignment = Repo::reviewAssignment()->get($review_assignment_id);
-                    }
+                    $review_assignment_id = Repo::reviewAssignment()->add($review_assignment);
+                    $review_assignment = Repo::reviewAssignment()->get($review_assignment_id);
 
                     if (trim($review_record->coreferees)) {
                         json_decode($review_record->coreferees, true, 512, JSON_THROW_ON_ERROR);
@@ -471,12 +345,12 @@ class OreImporter
                                     </svg>
                                 </span>
                             </a>' : '');
-                        }, $coreferees);
+                        }, $review_record->coreferees);
                         $coreferees = implode('<br>', $coreferees);
                         $review_record->comment = '<strong>The review was co-authored by:</strong><br>' . implode('<br>', $coreferees) . '<br><br>' . $review_record->comment;
                     }
 
-                    $questions = $this->_connection->select("select
+                    $questions = $this->connection->select("select
                         q.question_description,
                         CASE r.result
                             WHEN 'np' THEN 'Not applicable'
@@ -505,18 +379,7 @@ class OreImporter
                     // Create review comment if provided
                     if (!empty($review_record->comment)) {
                         $submission_comment_dao = DAORegistry::getDAO('SubmissionCommentDAO'); /** @var SubmissionCommentDAO $submission_comment_dao */
-                        $submission_comments = $submission_comment_dao->getReviewerCommentsByReviewerId(
-                            $review_assignment->getSubmissionId(),
-                            $review_assignment->getReviewerId(),
-                            $review_assignment->getId(),
-                            true
-                        );
-                        $comment = $submission_comments->next(); /** @var SubmissionComment|null $comment */
-
-                        if (!isset($comment)) {
-                            $comment = $submission_comment_dao->newDataObject();
-                        }
-
+                        $comment = $submission_comment_dao->newDataObject();
                         $comment->setCommentType(SubmissionComment::COMMENT_TYPE_PEER_REVIEW);
                         $comment->setRoleId(Role::ROLE_ID_REVIEWER);
                         $comment->setAssocId($review_assignment->getId());
@@ -526,35 +389,18 @@ class OreImporter
                         $comment->setCommentTitle('');
                         $comment->setViewable(true);
                         $comment->setDatePosted(Core::getCurrentDate());
-
-                        // Save or update
-                        if ($comment->getId() != null) {
-                            $submission_comment_dao->updateObject($comment);
-                        } else {
-                            $submission_comment_dao->insertObject($comment);
-                        }
+                        $submission_comment_dao->insertObject($comment);
                     }
                 }
 
                 // Create an edit decision if we have a valid decision value
-                $this->createEditDecision(
-                    $submission,
-                    $publication,
-                    $review_round,
-                    Decision::ACCEPT,
-                    $review_record->published_date
-                );
+                $this->createEditDecision($submission, $publication, $review_round, Decision::ACCEPT, $review_record->published_date);
             }
 
             // Import author responses: approved comments linked to reports in this round
             $report_ids = array_map('intval', array_keys($reviews_by_review_id));
             if (!empty($report_ids)) {
-                $this->importAuthorResponsesForRound(
-                    $submission,
-                    $publication,
-                    $review_round,
-                    $report_ids
-                );
+                $this->importAuthorResponsesForRound($submission, $publication, $review_round, $report_ids);
             }
         }
     }
@@ -573,7 +419,7 @@ class OreImporter
             return [];
         }
 
-        $rows = $this->_connection->table('f1000r_comment_report as cr')
+        $rows = $this->connection->table('f1000r_comment_report as cr')
             ->join('f1000r_comment as c', 'c.id', '=', 'cr.comment_id')
             ->whereIn('cr.report_id', $reportIds)
             ->where('c.status', '=', 'APPROVED')
@@ -599,12 +445,8 @@ class OreImporter
      * Creates or replaces author response(s) for the given review round using F1000R approved comments.
      * One AuthorResponse is created per approved comment, with createdAt/updatedAt from the PostgreSQL comment.
      */
-    private function importAuthorResponsesForRound(
-        Submission $submission,
-        Publication $publication,
-        ReviewRound $review_round,
-        array $reportIds
-    ): void {
+    private function importAuthorResponsesForRound(Submission $submission, Publication $publication, ReviewRound $review_round, array $reportIds): void
+    {
         $approved_comments = $this->getApprovedCommentsForReportIds($reportIds);
         if (empty($approved_comments)) {
             return;
@@ -633,7 +475,7 @@ class OreImporter
 
             $reviewResponse = AuthorResponse::create([
                 'reviewRoundId' => $review_round->getId(),
-                'authorResponse' => [$this->_locale => $comment->text],
+                'authorResponse' => [$this->locale => $comment->text],
                 'userId' => $author_user_id,
             ]);
 
@@ -667,15 +509,6 @@ class OreImporter
     }
 
     /**
-     * Decision to reviewer recommendation title (for matching against ReviewerRecommendation::getLocalizedData('title')).
-     */
-    private const DECISION_TO_RECOMMENDATION_TITLE = [
-        'APPROVED' => 'Approved',
-        'APPROVED_WITH_RESERVATIONS' => 'Approved with Reservations',
-        'NOT_APPROVED' => 'Not Approved',
-    ];
-
-    /**
      * Resolve reviewerRecommendationId for the given F1000R decision.
      * Finds the ReviewerRecommendation for the context whose localized title matches the mapped recommendation title.
      *
@@ -688,13 +521,17 @@ class OreImporter
             return null;
         }
 
-        $recommendationTitle = self::DECISION_TO_RECOMMENDATION_TITLE[$decision] ?? null;
+        $recommendationTitle = [
+            'APPROVED' => 'Approved',
+            'APPROVED_WITH_RESERVATIONS' => 'Approved with Reservations',
+            'NOT_APPROVED' => 'Not Approved',
+        ][$decision] ?? null;
         if ($recommendationTitle === null) {
             return null;
         }
 
         $recommendations = ReviewerRecommendation::query()
-            ->withContextId($this->_contextId)
+            ->withContextId($this->contextId)
             ->get();
 
         foreach ($recommendations as $recommendation) {
@@ -709,14 +546,8 @@ class OreImporter
 
     /**
      * Gets or creates an author user for stage assignments
-     *
-     * @param string|null $firstName
-     * @param string|null $lastName
-     * @param string|null $email
-     * @param int $authorGroupId
-     * @return User|null
      */
-    private function getOrCreateAuthorUser(?string $firstName, ?string $lastName, ?string $email, int $authorGroupId): ?User
+    private function getOrCreateUser(?string $firstName, ?string $lastName, ?string $email, int $userGroupId): ?User
     {
         if (!$email) {
             return null;
@@ -724,15 +555,15 @@ class OreImporter
 
         $user = Repo::user()->getByEmail($email, true);
         if ($user) {
-            if (!Repo::userGroup()->userInGroup($user->getId(), $authorGroupId)) {
-                Repo::userGroup()->assignUserToGroup($user->getId(), $authorGroupId);
+            if (!Repo::userGroup()->userInGroup($user->getId(), $userGroupId)) {
+                Repo::userGroup()->assignUserToGroup($user->getId(), $userGroupId);
             }
             return $user;
         }
 
         $user = Repo::user()->newDataObject();
-        $user->setGivenName($firstName ?? '', $this->_locale);
-        $user->setFamilyName($lastName ?? '', $this->_locale);
+        $user->setGivenName($firstName ?? '', $this->locale);
+        $user->setFamilyName($lastName ?? '', $this->locale);
         $user->setEmail($email);
         $user->setUsername($email);
         $user->setDateRegistered(Core::getCurrentDate());
@@ -744,61 +575,8 @@ class OreImporter
             return null;
         }
 
-        Repo::userGroup()->assignUserToGroup($userId, $authorGroupId);
+        Repo::userGroup()->assignUserToGroup($userId, $userGroupId);
         return Repo::user()->get($userId);
-    }
-
-    /**
-     * Gets or creates a reviewer user
-     *
-     * @param string|null $first_name
-     * @param string|null $last_name
-     * @param string|null $email
-     * @param int $reviewer_group_id
-     * @return User|null
-     */
-    private function getOrCreateReviewerUser(?string $first_name, ?string $last_name, ?string $email, int $reviewer_group_id): ?User
-    {
-        if (!$email) {
-            return null;
-        }
-
-        // Try to get existing user by email
-        $user = Repo::user()->getByEmail($email, true);
-
-        if ($user) {
-            // Ensure user has reviewer role
-            $has_reviewer_role = Repo::userGroup()->userInGroup($user->getId(), $reviewer_group_id);
-
-            if (!$has_reviewer_role) {
-                Repo::userGroup()->assignUserToGroup($user->getId(), $reviewer_group_id);
-            }
-
-            return $user;
-        }
-
-        // Create new user
-        $user = Repo::user()->newDataObject();
-        $user->setGivenName($first_name ?? '', $this->_locale);
-        $user->setFamilyName($last_name ?? '', $this->_locale);
-        $user->setEmail($email);
-        $user->setUsername($email); // Use email as username
-        $user->setDateRegistered(Core::getCurrentDate());
-        $user->setInlineHelp(1);
-
-        // Generate a random password (user will need to reset it)
-        $password = Str::random(16);
-        $user->setPassword(Validation::encryptCredentials($email, $password));
-
-        $user_id = Repo::user()->add($user);
-        if (!$user_id) {
-            return null;
-        }
-
-        // Assign reviewer role
-        Repo::userGroup()->assignUserToGroup($user_id, $reviewer_group_id);
-
-        return Repo::user()->get($user_id);
     }
 
     /**
@@ -810,13 +588,8 @@ class OreImporter
      * @param int $decision
      * @param string|null $date_decided
      */
-    private function createEditDecision(
-        Submission $submission,
-        Publication $publication,
-        $review_round,
-        int $decision,
-        ?string $date_decided
-    ): void {
+    private function createEditDecision(Submission $submission, Publication $publication, $review_round, int $decision, ?string $date_decided): void
+    {
         // Check if decision already exists for this review round
         $existing_decisions = Repo::decision()->getCollector()
             ->filterBySubmissionIds([$submission->getId()])
@@ -829,7 +602,7 @@ class OreImporter
             return;
         }
 
-        $editor = $this->_configuration->getEditor();
+        $editor = $this->configuration->getEditor();
         $date_decided_obj = $date_decided
             ? $this->parseDateString($date_decided)
             : new DateTimeImmutable();
