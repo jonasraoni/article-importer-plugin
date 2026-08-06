@@ -16,6 +16,7 @@ use APP\publication\Publication;
 use APP\submission\Submission;
 use APP\facades\Repo;
 use DateTimeImmutable;
+use DOMElement;
 use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -119,7 +120,7 @@ class ReviewImporter
     /**
      * Creates OJS reviews for each version based on the database query
      */
-    public function createReviewsForVersions(Submission $submission): void
+    public function createReviewsForVersions(Submission $submission, BaseParser $parser): void
     {
         $publications = $submission->getPublishedPublications();
         $bestDoi = null;
@@ -159,33 +160,18 @@ class ReviewImporter
             JOIN f1000r_report AS r ON r.version_id = v.id
             JOIN f1000r_referee_report AS rr ON rr.report_id = r.id AND rr.is_coreferee = false
             JOIN f1000r_referee AS re ON re.id = rr.referee_id
-            LEFT JOIN f1000r_affiliation AS a ON a.id = re.affiliation_id
             LEFT JOIN f1000r_article_referee AS ar ON ar.article_id = v.article_id AND ar.referee_id = rr.referee_id
             LEFT JOIN LATERAL (
                 SELECT json_agg(coreferee) AS content FROM (
                     SELECT json_build_object(
                         'name', re.first_name,
                         'surname', re.last_name,
-                        'affiliation', STRING_AGG(
-                            CONCAT(
-                                i.name,
-                                CASE WHEN a.place <> '' THEN ', ' || a.place ELSE '' END,
-                                CASE WHEN a.state <> '' THEN ', ' || a.state ELSE '' END
-                            ),
-                            '; ' ORDER BY ara.id
-                        ),
-                        'orcid', o.orcid,
                         'email', re.email
                     ) AS coreferee
                     FROM f1000r_referee_report rr
                     JOIN f1000r_referee AS re ON re.id = rr.referee_id
-                    LEFT JOIN f1000r_article_referee AS ar ON ar.article_id = v.article_id AND ar.referee_id = rr.referee_id
-                    LEFT JOIN f1000r_article_referee_affiliation AS ara ON ara.article_referee_id = ar.id
-                    LEFT JOIN f1000r_affiliation a ON a.id = ara.affiliation_id
-                    LEFT JOIN bible_institution i ON i.id = a.institution_id
-                    LEFT JOIN orcid_access_data AS o ON o.email = re.email
                     WHERE rr.report_id = r.id AND rr.is_coreferee = true
-                    GROUP BY re.first_name, re.last_name, rr.position, o.orcid, re.email
+                    GROUP BY re.first_name, re.last_name, rr.position, re.email
                     ORDER BY rr.position
                 )
             ) AS coreferees ON true
@@ -266,6 +252,7 @@ class ReviewImporter
             foreach ($reviewsByReviewId as $reviewId => $reviewData) {
                 $reviewRecord = $reviewData['reviewData'];
                 $reviewers = $reviewData['reviewers'];
+                $reviewersFromNode = $this->getReviewersFromNode($parser, (int) $reviewId);
 
                 // Create review assignments for each reviewer in this review
                 foreach ($reviewers as $reviewerData) {
@@ -275,6 +262,8 @@ class ReviewImporter
                         $reviewerData->email,
                         $reviewerGroupId
                     );
+
+                    $this->updateUser($reviewerUser, $reviewersFromNode[$this->buildNameKey($reviewerData->first_name, $reviewerData->last_name)] ?? null);
 
                     $reviewerRecommendationId = $this->getReviewerRecommendationIdForDecision($reviewRecord->decision ?? null);
 
@@ -312,31 +301,15 @@ class ReviewImporter
                     $reviewAssignmentId = Repo::reviewAssignment()->add($reviewAssignment);
                     $reviewAssignment = Repo::reviewAssignment()->get($reviewAssignmentId);
 
-                    if (trim($reviewRecord->coreferees)) {
-                        json_decode($reviewRecord->coreferees, true, 512, JSON_THROW_ON_ERROR);
-                        $coreferees = array_map(function ($coreferee) {
-                            $orcid = $coreferee['orcid'] ?? ($coreferee['email'] ? DB::scalar("
-                                SELECT COALESCE(
-                                    (
-                                        SELECT s.setting_value
-                                        FROM users u
-                                        JOIN user_settings s ON s.user_id = u.user_id AND s.setting_name = 'orcid'
-                                        WHERE u.email = ?
-                                        LIMIT 1
-                                    ),
-                                    (
-                                        SELECT s.setting_value
-                                        FROM authors a
-                                        JOIN author_settings s ON s.author_id = a.author_id AND s.setting_name = 'orcid'
-                                        WHERE a.email = ?
-                                        LIMIT 1
-                                    )
-                                ) AS orcid
-                            ", [$coreferee['email'], $coreferee['email']]) : null);
-
+                    if ($coreferees = trim($reviewRecord->coreferees . '')) {
+                        $coreferees = json_decode($coreferees, true, 512, JSON_THROW_ON_ERROR) ?: [];
+                        $coreferees = array_map(function ($coreferee) use ($reviewersFromNode) {
+                            $reviewer = $reviewersFromNode[$this->buildNameKey($coreferee['name'], $coreferee['surname'])] ?? null;
+                            $orcid = $reviewer['orcid'] ?? null;
+                            $affiliation = $reviewer['affiliation'] ?? null;
                             return ($orcid ? '<a href="https://orcid.org/' . $orcid . '" target="_blank" class="d-flex align-items-center gap-1 text-decoration-none" aria-label="ORCID record of ' . htmlspecialchars($coreferee['name']) . '">' : '') . '
                                 <span class="ore-grey-900 ore-label-small">
-                                    ' . htmlspecialchars($coreferee['name'] . ' ' . $coreferee['surname']) . ($coreferee['affiliation'] ? ', ' . htmlspecialchars($coreferee['affiliation']) : '') . '
+                                    ' . htmlspecialchars($coreferee['name'] . ' ' . $coreferee['surname']) . ($affiliation ? ', ' . htmlspecialchars($affiliation) : '') . '
                                 </span>
                                 ' . ($orcid ? '
                                 <span class="ore-label-small ore-tertiary-900">
@@ -347,7 +320,7 @@ class ReviewImporter
                                     </svg>
                                 </span>
                             </a>' : '');
-                        }, $reviewRecord->coreferees);
+                        }, $coreferees);
                         $reviewRecord->comment = '<strong>The review was co-authored by:</strong><br>' . implode('<br>', $coreferees) . '<br><br>' . $reviewRecord->comment;
                     }
 
@@ -471,8 +444,8 @@ class ReviewImporter
         $associatedAuthorIds = $authors ? $authors->map(fn ($a) => $a->getId())->all() : [];
 
         foreach ($approvedComments as $comment) {
-            $createdAt = $this->formatCommentDateForOjs($comment->creationDate);
-            $updatedAt = $this->formatCommentDateForOjs($comment->lastUpdated ?? $comment->creationDate);
+            $createdAt = $this->formatDate($comment->creationDate);
+            $updatedAt = $this->formatDate($comment->lastUpdated ?? $comment->creationDate);
 
             $reviewResponse = AuthorResponse::create([
                 'reviewRoundId' => $reviewRound->getId(),
@@ -497,7 +470,7 @@ class ReviewImporter
     /**
      * Formats a PostgreSQL timestamp (or string) to OJS datetime string for created_at/updated_at.
      */
-    private function formatCommentDateForOjs(mixed $dateValue): string
+    private function formatDate(mixed $dateValue): string
     {
         if ($dateValue === null) {
             return Core::getCurrentDate();
@@ -546,6 +519,111 @@ class ReviewImporter
     }
 
     /**
+     * Retrieves a key based on the name/surname.
+     */
+    private function buildNameKey(?string $given, ?string $family): string
+    {
+        return mb_strtolower(trim((string) $given) . "\0" . trim((string) $family));
+    }
+
+    /**
+     * Read affiliation text from an <aff> node
+     */
+    private function getAffiliationText(DOMElement $affiliationNode): string
+    {
+        $clone = $affiliationNode->cloneNode(true);
+        /** @var DOMElement $clone */
+        foreach (iterator_to_array($clone->getElementsByTagName('label')) as $label) {
+            $label->parentNode?->removeChild($label);
+        }
+
+        return trim($clone->textContent);
+    }
+
+    /**
+     * Collect affiliations for a contrib
+     *
+     * @return list<string>
+     */
+    private function getAffiliations(BaseParser $parser, DOMElement $node): array
+    {
+        $affiliations = [];
+        foreach ($parser->select("xref[@ref-type='aff']", $node) as $xref) {
+            /** @var DOMElement $xref */
+            $id = $xref->getAttribute('rid');
+            if (!$id) {
+                continue;
+            }
+            $affiliationNode = $parser->selectFirst("../aff[@id='{$id}']", $node);
+            if (!$affiliationNode) {
+                continue;
+            }
+            $affiliations[] = $this->getAffiliationText($affiliationNode);
+        }
+
+        foreach ($parser->select('aff', $node) as $affiliationNode) {
+            if (!$affiliationNode) {
+                continue;
+            }
+            $affiliations[] = $this->getAffiliationText($affiliationNode);
+        }
+
+        return $affiliations;
+    }
+
+    /**
+     * Retrieve author information from <sub-article>s.
+     *
+     * @return array<string, array{given: string, family: string, orcid: ?string, affiliation: ?string}>
+     */
+    private function getReviewersFromNode(BaseParser $parser, int $reportId): array
+    {
+        $authors = [];
+        $path = "//sub-article[@article-type='reviewer-report' and @id='report{$reportId}']/front-stub/contrib-group/contrib";
+        foreach ($parser->select($path) as $node) {
+            $given = $parser->selectText('name/given-names', $node);
+            $family = $parser->selectText('name/surname', $node);
+            if (!$given && !$family) {
+                continue;
+            }
+            $key = $this->buildNameKey($given, $family);
+            $affiliations = $this->getAffiliations($parser, $node);
+            $authors[$key] = [
+                'given' => $given,
+                'family' => $family,
+                'orcid' => trim($parser->selectText(".//uri[@content-type='orcid']", $node)) ?: null,
+                'affiliation' => $affiliations ? implode('; ', $affiliations) : null,
+            ];
+        }
+        return $authors;
+    }
+
+    /**
+     * Set the user's ORCID/affiliation if missing
+     *
+     * @param ?array{given: string, family: string, orcid: ?string, affiliation: ?string} $contrib
+     */
+    private function updateUser(?User $user, ?array $contrib): void
+    {
+        if (!$user || !$contrib) {
+            return;
+        }
+
+        $updated = false;
+        if (!empty($contrib['orcid']) && !$user->getOrcid()) {
+            $user->setOrcid($contrib['orcid']);
+            $updated = true;
+        }
+        if (!empty($contrib['affiliation']) && !$user->getAffiliation($this->locale)) {
+            $user->setAffiliation($contrib['affiliation'], $this->locale);
+            $updated = true;
+        }
+        if ($updated) {
+            Repo::user()->edit($user);
+        }
+    }
+
+    /**
      * Gets or creates an author user for stage assignments
      */
     private function getOrCreateUser(?string $firstName, ?string $lastName, ?string $email, int $userGroupId): ?User
@@ -585,7 +663,7 @@ class ReviewImporter
      *
      * @param Submission $submission
      * @param Publication $publication
-     * @param \PKP\submission\reviewRound\ReviewRound $reviewRound
+     * @param ReviewRound $reviewRound
      * @param int $decision
      * @param string|null $dateDecided
      */

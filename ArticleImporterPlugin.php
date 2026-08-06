@@ -43,7 +43,7 @@ class ArticleImporterPlugin extends ImportExportPlugin
             'host' => getenv('F1000_DB_HOST') ?: '127.0.0.1',
             'database' => getenv('F1000_DB_NAME') ?: 'ore',
             'username' => getenv('F1000_DB_USER') ?: 'root',
-            'password' => getenv('F1000_DB_PASS') ?: 'abc123',
+            'password' => getenv('F1000_DB_PASS') ?: 'password',
         ], 'source');
         return static::$oreConnection = $capsule->getConnection('source');
     }
@@ -59,6 +59,11 @@ class ArticleImporterPlugin extends ImportExportPlugin
         // Disable the time limit
         set_time_limit(0);
 
+        if (in_array('--cleanup', $args)) {
+            $this->cleanup();
+            exit(0);
+        }
+
         // Expects 5 non-empty arguments
         if (count(array_filter($args, 'strlen')) < 5) {
             $this->usage($scriptName);
@@ -67,12 +72,6 @@ class ArticleImporterPlugin extends ImportExportPlugin
 
         // Map arguments to variables
         [$contextPath, $username, $editorUsername, $email, $importPath] = $args;
-
-
-        if (in_array('--cleanup', $args)) {
-            $this->cleanup();
-            exit(0);
-        }
 
         // Parse command-line flags
         $generateHtml = !in_array('--no-html', $args);

@@ -15,7 +15,6 @@ namespace APP\plugins\importexport\articleImporter;
 use APP\facades\Repo;
 use APP\plugins\importexport\articleImporter\exceptions\ArticleSkippedException;
 use APP\publication\enums\VersionStage;
-use APP\publication\Publication;
 use Generator;
 use PKP\publication\helpers\PublicationVersionInfo;
 use SplFileInfo;
@@ -190,7 +189,7 @@ class ArticleEntry
             }
 
             $reviewImporter = new ReviewImporter($configuration, $oreConnection, $version);
-            $reviewImporter->createReviewsForVersions($parser->getSubmission());
+            $reviewImporter->createReviewsForVersions($parser->getSubmission(), $parser);
 
             $processed = true;
         }
