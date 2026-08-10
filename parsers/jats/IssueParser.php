@@ -76,6 +76,11 @@ trait IssueParser
             return $this->_issue;
         }
 
+        // --no-issue: never create or assign issues (continuous publishing)
+        if (!$this->getConfiguration()->shouldCreateIssues()) {
+            return null;
+        }
+
         $entry = $this->getArticleEntry();
         $volume = $this->selectText('front/article-meta/volume') ?: $entry->getVolume();
         $issueNumber = $this->selectText('front/article-meta/issue') ?: $entry->getIssue();

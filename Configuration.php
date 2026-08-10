@@ -62,6 +62,8 @@ class Configuration
     private bool $_hasNumber = true;
     /** @var bool Whether to preload the HTML from the ORE database */
     private bool $_preloadHtml = false;
+    /** @var bool Whether issues should be created/assigned during import */
+    private bool $_createIssues = true;
     /**
      * Constructor
      *
@@ -78,8 +80,9 @@ class Configuration
      * @param bool $hasVolume Whether the import structure includes a volume folder level
      * @param bool $hasNumber Whether the import structure includes a number (issue) folder level
      * @param bool $preloadHtml Whether to preload the HTML from the ORE database
+     * @param bool $createIssues Whether issues should be created/assigned during import
      */
-    public function __construct(array $parsers, string $contextPath, string $username, string $editorUsername, string $email, string $importPath, string $defaultSectionName = 'Articles', bool $generateHtml = true, bool $useCategoryAsSection = false, bool $hasVersion = true, bool $hasVolume = true, bool $hasNumber = true, bool $preloadHtml = false)
+    public function __construct(array $parsers, string $contextPath, string $username, string $editorUsername, string $email, string $importPath, string $defaultSectionName = 'Articles', bool $generateHtml = true, bool $useCategoryAsSection = false, bool $hasVersion = true, bool $hasVolume = true, bool $hasNumber = true, bool $preloadHtml = false, bool $createIssues = true)
     {
         $this->_defaultSectionName = $defaultSectionName;
         $this->_parsers = $parsers;
@@ -89,6 +92,7 @@ class Configuration
         $this->_hasVolume = $hasVolume;
         $this->_hasNumber = $hasNumber;
         $this->_preloadHtml = $preloadHtml;
+        $this->_createIssues = $createIssues;
         if (!$this->_context = Application::getContextDAO()->getByPath($contextPath)) {
             throw new InvalidArgumentException(__('plugins.importexport.articleImporter.unknownJournal', ['journal' => $contextPath]));
         }
@@ -336,5 +340,13 @@ class Configuration
     public function shouldPreloadHtml(): bool
     {
         return $this->_preloadHtml;
+    }
+
+    /**
+     * Retrieves whether issues should be created/assigned during import
+     */
+    public function shouldCreateIssues(): bool
+    {
+        return $this->_createIssues;
     }
 }

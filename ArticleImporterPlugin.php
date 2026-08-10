@@ -80,6 +80,7 @@ class ArticleImporterPlugin extends ImportExportPlugin
         $hasVolume = !in_array('--no-volume', $args);
         $hasNumber = !in_array('--no-number', $args);
         $preloadHtml = in_array('--preload-html', $args);
+        $createIssues = !in_array('--no-issue', $args);
 
         $this->resetAutoIncrements();
 
@@ -98,7 +99,8 @@ class ArticleImporterPlugin extends ImportExportPlugin
                 $hasVersion,
                 $hasVolume,
                 $hasNumber,
-                $preloadHtml
+                $preloadHtml,
+                $createIssues
             );
 
             $this->_writeLine(__('plugins.importexport.articleImporter.importStart'));
@@ -156,7 +158,7 @@ class ArticleImporterPlugin extends ImportExportPlugin
             }
 
             // Resequences issue orders
-            if ($imported) {
+            if ($imported && $configuration->shouldCreateIssues()) {
                 $this->resequenceIssues($configuration);
             }
 

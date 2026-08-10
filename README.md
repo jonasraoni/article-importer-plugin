@@ -38,6 +38,8 @@ The `volume#`, `issue#` (number) and `version#` levels are each optional and tog
 
 When both `--no-volume` and `--no-number` are passed, articles are imported without an issue (continuous publishing); in that case each article's metadata XML must contain a publication date. If only one of volume/number is present, an issue is created from whatever is available.
 
+Use `--no-issue` to force continuous publishing regardless of volume/number in folders or XML — no issues are created or assigned.
+
 All `#` designations will be treated as numeric values; e.g. 'no.01-02' will be interpreted as "1".
 
 The article folder must have only one XML file, with the `.xml` extension, and only one fulltext PDF file, with the `.pdf` extension.
