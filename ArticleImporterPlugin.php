@@ -219,6 +219,7 @@ class ArticleImporterPlugin extends ImportExportPlugin
         $this->_writeLine('Deleting submissions');
         foreach (DB::select('SELECT submission_id FROM submissions') as $row) {
             try {
+                DB::delete('DELETE FROM publication_galleys WHERE publication_id IN (SELECT publication_id FROM publications WHERE submission_id = ?)', [$row->submission_id]);
                 $submission = Repo::submission()->get($row->submission_id);
                 Repo::submission()->delete($submission);
             } catch (Throwable $e) {

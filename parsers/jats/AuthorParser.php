@@ -40,7 +40,7 @@ trait AuthorParser
             ->withContextId($this->getContextId())
             ->where('name', 'Co-Author')
             ->first() ?? throw new Exception('Co-Author contributor role not found');
-        $doi = $this->getPublicIds()['doi'] ?? null;
+        $doi = $this->getPublicIds()['doi'] ?? '';
         $doi = explode('.', $doi);
         $version = (int) array_pop($doi);
         $articleId = (int) array_pop($doi);

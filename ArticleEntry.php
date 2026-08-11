@@ -133,7 +133,7 @@ class ArticleEntry
         foreach ($this->getVersions() as $version) {
             $parser = $version->process($configuration);
             $publication = $parser->getPublication();
-            $doi = $parser->getPublicIds()['doi'] ?? null;
+            $doi = $parser->getPublicIds()['doi'] ?? '';
             $doi = explode('.', $doi);
             $version = (int) array_pop($doi);
             $articleId = (int) array_pop($doi);
@@ -148,7 +148,7 @@ class ArticleEntry
                 ->where('v.version_number', $version)
                 ->where('v.status', 'PUBLISHED')
                 ->where('r.status', 'PUBLISHED')
-                ->select('r.decision')
+                ->select('r.decision', 'rr.referee_id')
                 ->get();
 
             foreach ($reports as $report) {
@@ -189,7 +189,7 @@ class ArticleEntry
             }
 
             $reviewImporter = new ReviewImporter($configuration, $oreConnection, $version);
-            $reviewImporter->createReviewsForVersions($parser->getSubmission(), $parser);
+            $reviewImporter->createReviewsForVersions(Repo::submission()->get($parser->getSubmission()->getId()), $parser);
 
             $processed = true;
         }
