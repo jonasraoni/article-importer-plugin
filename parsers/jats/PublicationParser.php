@@ -214,7 +214,11 @@ trait PublicationParser
         // Process full text and generate HTML files
         if ($this->hasDoi()) {
             $this->_processFullText(false);
-            $this->downloadHtml();
+            try {
+                $this->downloadHtml();
+            } catch (Exception $e) {
+                echo 'Failed to download HTML: ' . $e->getMessage() . "\n";
+            }
             $this->_insertHTMLGalley($publication);
             $this->_insertSupplementaryGalleys($publication);
         }
