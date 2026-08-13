@@ -44,7 +44,9 @@ class ArticleIterator implements IteratorAggregate
         // The article folder depth depends on which optional levels (volume/number) are present: [volume/][number/]article
         $depth = (int) $this->hasVolume + (int) $this->hasNumber + 1;
         $pattern = $this->path . str_repeat('/*', $depth);
-        foreach (glob($pattern, GLOB_ONLYDIR) as $path) {
+        $paths = glob($pattern, GLOB_ONLYDIR);
+        sort($paths, SORT_NATURAL);
+        foreach ($paths as $path) {
             $directory = new SplFileInfo($path);
 
             // Walk up the path to resolve the available levels (path order is volume/number/article)
