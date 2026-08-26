@@ -497,12 +497,10 @@ class ReviewImporter
 
         $recommendationTitle = [
             'APPROVED' => 'Approved',
-            'APPROVED_WITH_RESERVATIONS' => 'Approved with Reservations',
+            'APPROVED_WITH_RESERVATIONS' => 'Revisions Required',
             'NOT_APPROVED' => 'Not Approved',
-        ][$decision] ?? null;
-        if ($recommendationTitle === null) {
-            return null;
-        }
+        ][$decision]
+            ?? throw new Exception("Reviewer recommendation title not found for decision: {$decision}");
 
         $recommendations = ReviewerRecommendation::query()
             ->withContextId($this->contextId)
@@ -515,7 +513,7 @@ class ReviewImporter
             }
         }
 
-        return null;
+        throw new Exception("Reviewer recommendation not found for decision: {$decision}");
     }
 
     /**
