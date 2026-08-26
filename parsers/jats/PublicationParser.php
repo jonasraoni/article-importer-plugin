@@ -34,7 +34,9 @@ use PKP\submissionFile\enums\MediaVariantType;
 use PKP\submissionFile\SubmissionFile;
 use APP\facades\Repo;
 use PKP\controlledVocab\ControlledVocab;
+use PKP\core\PKPString;
 use PKP\submissionFile\VariantGroup;
+use PKP\userComment\UserComment;
 use FilesystemIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -203,6 +205,7 @@ trait PublicationParser
         $this->_processAuthors($publication);
         // Save primary author
         $publication = Repo::publication()->edit($publication, []);
+        $this->_processUserComments($publication);
 
         // Handle PDF galley
         if ($this->hasDoi()) {
@@ -229,6 +232,56 @@ trait PublicationParser
         }
 
         return $this->_publication = $publication;
+    }
+
+    /**
+     * Import approved ORE comments for this publication as OJS user comments.
+     */
+    private function _processUserComments(Publication $publication): void
+    {
+        $doi = $this->getPublicIds()['doi'] ?? '';
+        $doi = explode('.', $doi);
+        $version = (int) array_pop($doi);
+        $articleId = (int) array_pop($doi);
+        if (!$articleId || !$version) {
+            return;
+        }
+
+        $comments = ArticleImporterPlugin::getOreConnection()
+            ->table('f1000r_comment as c')
+            ->join('usr as u', 'u.usr_id', '=', 'c.usr_id')
+            ->join('f1000r_version as v', 'v.id', '=', 'c.version_id')
+            ->where('c.status', 'APPROVED')
+            ->where('v.article_id', $articleId)
+            ->where('v.version_number', $version)
+            ->orderBy('c.creation_date')
+            ->select(['c.text', 'c.creation_date', 'c.last_updated', 'u.usr_email'])
+            ->get();
+
+        $contextId = $this->getContextId();
+        foreach ($comments as $comment) {
+            $commentText = PKPString::stripUnsafeHtml(trim((string) ($comment->text ?? '')));
+            $email = trim((string) ($comment->usr_email ?? ''));
+            if ($commentText === '' || $email === '') {
+                continue;
+            }
+
+            $user = Repo::user()->getByEmail($email, true);
+            if (!$user) {
+                continue;
+            }
+
+            UserComment::query()->create([
+                'userId' => $user->getId(),
+                'contextId' => $contextId,
+                'publicationId' => $publication->getId(),
+                'commentText' => $commentText,
+                'isApproved' => true,
+                'createdAt' => $comment->creation_date,
+                'updatedAt' => $comment->last_updated ?? $comment->creation_date,
+                'approvedAt' => $comment->last_updated ?? $comment->creation_date,
+            ]);
+        }
     }
 
     /**
