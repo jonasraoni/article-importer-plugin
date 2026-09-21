@@ -135,22 +135,15 @@ trait PublicationParser
         // Set abstract
         /** @var DOMElement $node  */
         foreach ($this->select('front/article-meta/abstract|front/article-meta/trans-abstract') as $node) {
-            $value = trim($this->getTextContent($node, function ($node, $content) {
-                // Transforms the known tags, the remaining ones will be stripped
-                $tag = [
-                    'title' => 'strong',
-                    'italic' => 'em',
-                    'sub' => 'sub',
-                    'sup' => 'sup',
-                    'p' => 'p'
-                ][$node->nodeName] ?? null;
-                return $tag ? "<{$tag}>{$content}</{$tag}>" : $content;
-            }));
+            $fieldName = strtolower($node->getAttribute('abstract-type') ?? '') === 'plain-language-summary' ? 'plainLanguageSummary' : 'abstract';
+            $htmlNode = $this->convertJatsToHtml($node->cloneNode(true));
+            $value = trim($htmlNode->ownerDocument->saveXML($htmlNode));
             if ($value) {
-                if (($node->getAttribute('abstract-type') ?? '') === 'plain-language-summary') {
+                if ($fieldName === 'plainLanguageSummary') {
                     $value = str_ireplace('<strong>Plain language summary</strong>', '', $value);
                 }
-                $publication->setData(strtolower($node->getAttribute('abstract-type') ?? '') === 'plain-language-summary' ? 'plainLanguageSummary' : 'abstract', $value, $this->getLocale($node->getAttribute('xml:lang')));
+
+                $publication->setData($fieldName, $value, $this->getLocale($node->getAttribute('xml:lang')));
             }
         }
 
@@ -422,18 +415,9 @@ trait PublicationParser
         $locale = null;
         /** @var DOMElement $node */
         foreach ($this->select('front/article-meta/funding-group/funding-statement') as $node) {
-            $value = trim($this->getTextContent($node, function ($node, $content) {
-                // Transforms the known tags, the remaining ones will be stripped
-                $tag = [
-                    'title' => 'strong',
-                    'italic' => 'em',
-                    'sub' => 'sub',
-                    'sup' => 'sup',
-                    'p' => 'p'
-                ][$node->nodeName] ?? null;
-                return $tag ? "<{$tag}>{$content}</{$tag}>" : $content;
-            }));
-            if ($value !== '') {
+            $htmlNode = $this->convertJatsToHtml($node->cloneNode(true));
+            $value = trim($htmlNode->ownerDocument->saveXML($htmlNode));
+            if ($value) {
                 $locale = $this->getLocale($node->getAttribute('xml:lang'));
                 $values[] = "<p>{$value}</p>";
             }
