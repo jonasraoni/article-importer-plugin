@@ -331,27 +331,24 @@ trait PublicationParser
     public function downloadHtml(): void
     {
         $htmlPath = str_replace('.xml', '.html', $this->getArticleVersion()->getMetadataFile());
-        if (file_exists($htmlPath)) {
-            return;
-        }
-
-        $doi = $this->getPublicIds()['doi'] ?? null;
-        $doi = explode('.', $doi);
-        $version = (int) array_pop($doi);
-        $articleId = (int) array_pop($doi);
-        $connection = ArticleImporterPlugin::getOreConnection();
-        $versionId = $connection->table('f1000r_version as v')
-            ->where('v.article_id', $articleId)
-            ->where('v.version_number', $version)
-            ->value('v.id');
-        $url = 'https://open-research-europe.ec.europa.eu/api/versions?id=' . $versionId;
-        $client = Application::get()->getHttpClient();
-        $response = json_decode($client->request('GET', $url)->getBody(), true);
-        $response = $response[0] ?? null;
-        $htmlUrl = $response['htmlUrl'] ?? null;
-        if ($htmlUrl) {
-            $response = $client->request('GET', $htmlUrl);
-            $html = "<html>
+        if (!file_exists($htmlPath)) {
+            $doi = $this->getPublicIds()['doi'] ?? null;
+            $doi = explode('.', $doi);
+            $version = (int) array_pop($doi);
+            $articleId = (int) array_pop($doi);
+            $connection = ArticleImporterPlugin::getOreConnection();
+            $versionId = $connection->table('f1000r_version as v')
+                ->where('v.article_id', $articleId)
+                ->where('v.version_number', $version)
+                ->value('v.id');
+            $url = 'https://open-research-europe.ec.europa.eu/api/versions?id=' . $versionId;
+            $client = Application::get()->getHttpClient();
+            $response = json_decode($client->request('GET', $url)->getBody(), true);
+            $response = $response[0] ?? null;
+            $htmlUrl = $response['htmlUrl'] ?? null;
+            if ($htmlUrl) {
+                $response = $client->request('GET', $htmlUrl);
+                $html = "<html>
     <head>
         <link rel=\"stylesheet\" type=\"text/css\" href=\"/styles/fulltext.css\"/>
         <script defer=\"defer\" src=\"/js/fulltext.js\"></script>
@@ -360,8 +357,22 @@ trait PublicationParser
         {$response->getBody()}
     </body>
 </html>";
-            file_put_contents($htmlPath, $html);
+
+                file_put_contents($htmlPath, $html);
+            }
         }
+
+        if (!file_exists($htmlPath)) {
+            return;
+        }
+
+        $localFiles = array_map('basename', glob(dirname($htmlPath) . '/*') ?: []);
+        $htmlContent = file_get_contents($htmlPath);
+        foreach ($localFiles as $filename) {
+            $pattern = '/\bhttps?:\/\/[^\s]*?' . preg_quote($filename, '/') . '\b/i';
+            $htmlContent = preg_replace($pattern, $filename, $htmlContent);
+        }
+        file_put_contents($htmlPath, $htmlContent);
     }
 
     /**
