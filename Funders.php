@@ -39,7 +39,7 @@ class Funders
      */
     public static function createFundersFromAwardGroups(array $awardGroups, int $submissionId, string $locale): void
     {
-        Funder::withSubmissionId($submissionId)->delete();
+        Funder::withSubmissionIds([$submissionId])->delete();
 
         // Merge award groups that refer to the same funder (same ROR, or same name when there's no ROR)
         // so a funder appears once with all of its grants combined (grant numbers de-duplicated).

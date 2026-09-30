@@ -248,7 +248,7 @@ trait PublicationParser
             ->where('v.article_id', $articleId)
             ->where('v.version_number', $version)
             ->orderBy('c.creation_date')
-            ->select(['c.text', 'c.creation_date', 'c.last_updated', 'u.usr_email'])
+            ->select(['c.text', 'c.creation_date', 'c.last_updated', 'u.usr_email', 'c.competing_interests'])
             ->get();
 
         $contextId = $this->getContextId();
@@ -259,9 +259,12 @@ trait PublicationParser
                 continue;
             }
 
+            $commentText = $comment->competing_interests ? "{$commentText}\n\n<strong>Competing interests:</strong> {$comment->competing_interests}" : $commentText;
+
             $user = Repo::user()->getByEmail($email, true);
             if (!$user) {
-                continue;
+                echo "User not found for comment: {$email}, using default import user\n";
+                $user = $this->getConfiguration()->getUser();
             }
 
             UserComment::query()->create([
@@ -535,7 +538,7 @@ trait PublicationParser
 
         /** @var DOMElement $asset */
         foreach ($this->select('//asset|//graphic') as $asset) {
-            $assetFilename = $asset->getAttribute($asset->nodeName === 'path' ? 'href' : 'xlink:href');
+            $assetFilename = basename($asset->getAttribute($asset->nodeName === 'path' ? 'href' : 'xlink:href'));
             $dependentFilePath = dirname($filename) . "/{$assetFilename}";
             if (file_exists($dependentFilePath)) {
                 $this->_createDependentFile($submission, $userId, $publication, $dependentFilePath);

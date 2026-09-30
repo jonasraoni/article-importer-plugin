@@ -157,16 +157,20 @@ class ArticleImporterPlugin extends ImportExportPlugin
                 }
             }
 
+            if ($configuration->shouldPreloadHtml()) {
+                return;
+            }
+
             // Resequences issue orders
             if ($imported && $configuration->shouldCreateIssues()) {
                 $this->resequenceIssues($configuration);
             }
 
-            $this->_writeLine('Processing Orcids');
-            $this->processOrcids();
-            $this->_writeLine('Including extra data for reviewers');
-            $this->fillReviewerIdentityFromAuthor($configuration->getContext()->getId());
-            DB::update("UPDATE user_user_groups SET date_start = NULL");
+            if ($imported) {
+                $this->_writeLine('Processing Orcids');
+                $this->processOrcids();
+                DB::update("UPDATE user_user_groups SET date_start = NULL");
+            }
 
             $this->_writeLine(__('plugins.importexport.articleImporter.importEnd'));
         } catch (Throwable $e) {
@@ -242,68 +246,6 @@ class ArticleImporterPlugin extends ImportExportPlugin
         Repo::eventLog()->deleteMany(Repo::eventLog()->getCollector());
 
         $this->_writeLine('Cleanup done');
-    }
-
-    /**
-     * Looks up an existing author matching the given email and extracts identity
-     * data (all ORCID OAuth fields and a flattened, localized affiliation string)
-     * for reuse on a user.
-     */
-    public function fillReviewerIdentityFromAuthor(int $contextId): void
-    {
-        /**
-         * @param string $email
-         * @return array{0: array<string, mixed>, 1: ?string} [orcidData, affiliation]
-         */
-        $getReviewerIdentityFromAuthor = function (string $email): array {
-            // Authors store email as a column on the authors table. Prefer the most
-            // recently inserted match, which is most likely to carry complete data.
-            $author_id = DB::table('authors')
-                ->where('email', $email)
-                ->orderByDesc('author_id')
-                ->value('author_id');
-
-            if (!$author_id) {
-                return [[], null];
-            }
-
-            $author = Repo::author()->get($author_id);
-            if (!$author) {
-                return [[], null];
-            }
-
-            // Copy the full set of ORCID fields shared via the HasOrcid trait.
-            $orcidFields = ['orcid', 'orcidIsVerified', 'orcidAccessDenied', 'orcidAccessToken', 'orcidAccessScope', 'orcidRefreshToken', 'orcidAccessExpiresOn'];
-            $orcidData = [];
-            foreach ($orcidFields as $field) {
-                $value = $author->getData($field);
-                if ($value !== null) {
-                    $orcidData[$field] = $value;
-                }
-            }
-
-            $affiliation = $author->getLocalizedAffiliationNamesAsString('en') ?: null;
-
-            return [$orcidData, $affiliation];
-        };
-
-        foreach (Repo::user()->getCollector()->filterByContextIds([$contextId])->getMany() as $user) {
-            // Backfill ORCID and affiliation from an existing author with the same email.
-            // This covers at least the author participant; richer source data is currently obfuscated.
-            [$orcidData, $affiliation] = $getReviewerIdentityFromAuthor($user->getEmail());
-            $updated = false;
-            if ($orcidData) {
-                $user->setVerifiedOrcidOAuthData($orcidData);
-                $updated = true;
-            }
-            if ($affiliation) {
-                $user->setAffiliation($affiliation, 'en');
-                $updated = true;
-            }
-            if ($updated) {
-                Repo::user()->edit($user);
-            }
-        }
     }
 
     /**

@@ -497,7 +497,7 @@ class ReviewImporter
 
         $recommendationTitle = [
             'APPROVED' => 'Approved',
-            'APPROVED_WITH_RESERVATIONS' => 'Revisions Required',
+            'APPROVED_WITH_RESERVATIONS' => 'Revisions Requested',
             'NOT_APPROVED' => 'Not Approved',
         ][$decision]
             ?? throw new Exception("Reviewer recommendation title not found for decision: {$decision}");
